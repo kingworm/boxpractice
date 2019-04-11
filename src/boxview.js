@@ -1,35 +1,6 @@
 import React from "react";
-import PinchAndZoom from "react-pinch-and-zoom";
-import ExifOrientationImg from "react-exif-orientation-img";
-import { render } from "react-dom";
-import s from "react-prefixr";
-import { ReactPinchZoomPan } from "react-pinch-zoom-pan";
-import PrismaZoom from "react-prismazoom";
-import { Stage, Layer, Rect, Group } from "react-konva";
 import CustomPinchToZoom from "./CustomPinchToZoom";
 import BoxCanvas from "./BoxCanvas";
-
-class Rectangle extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      color: "green"
-    };
-  }
-
-  render() {
-    return (
-      <Rect
-        x={this.props.x}
-        y={this.props.y}
-        width={this.props.width}
-        height={this.props.height}
-        strokeWidth={1}
-        stroke={"lime"}
-      />
-    );
-  }
-}
 
 class BoxView extends React.Component {
   constructor(props) {
@@ -130,7 +101,7 @@ class BoxView extends React.Component {
     }
   };
   handleMouseMove = e => {
-    console.log(this.state);
+    // console.log(this.state);
     if (this.state.isZoomed) {
       return;
     } else {
@@ -164,6 +135,11 @@ class BoxView extends React.Component {
       zoomedRect: {}
     });
   };
+  handleChange = crop => {
+    this.setState({
+      crop
+    });
+  };
   render() {
     return (
       <React.Fragment>
@@ -172,7 +148,11 @@ class BoxView extends React.Component {
           <CustomPinchToZoom>
             {scale => {
               return (
-                <BoxCanvas scale={scale} style={{ position: "relative" }} />
+                <BoxCanvas
+                  scale={scale}
+                  onChange={crop => this.handleChange(crop)}
+                  style={{ position: "relative" }}
+                />
               );
             }}
           </CustomPinchToZoom>
