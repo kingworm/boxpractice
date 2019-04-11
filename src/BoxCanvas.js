@@ -341,6 +341,7 @@ class BoxCanvas extends PureComponent {
     // this.updateScale();
   }
   onCropMouseTouchDown = e => {
+    console.log("touchDown");
     const { crop, disabled } = this.props;
 
     if (disabled) {
@@ -361,7 +362,8 @@ class BoxCanvas extends PureComponent {
     let cropOffset;
 
     if (crop.aspect) {
-      cropOffset = this.getElementOffset(this.cropSelectRef);
+      console.log("getElementOfset");
+      // cropOffset = this.getElementOffset(this.cropSelectRef);
     }
 
     this.evData = {
@@ -395,12 +397,15 @@ class BoxCanvas extends PureComponent {
       onChange,
       useNaturalImageDimensions
     } = this.props;
-
+    console.log(this.imageRef);
+    console.log("mousedown");
     if (e.target !== this.imageRef) {
+      console.log("non_target");
       return;
     }
 
     if (disabled || locked || (keepSelection && isCropValid(crop))) {
+      console.log("???");
       return;
     }
 
@@ -410,8 +415,9 @@ class BoxCanvas extends PureComponent {
 
     // Focus for detecting keypress.
     this.componentRef.focus({ preventScroll: true });
-
-    const imageOffset = this.getElementOffset(this.imageRef);
+    console.log("getElementOffset");
+    // const imageOffset = this.getElementOffset(this.imageRef);
+    const imageOffset = {};
     const xPc = ((clientPos.x - imageOffset.left) / this.imageRef.width) * 100;
     const yPc = ((clientPos.y - imageOffset.top) / this.imageRef.height) * 100;
 
@@ -449,24 +455,28 @@ class BoxCanvas extends PureComponent {
   };
 
   onDocMouseTouchMove = e => {
+    // console.log("Move!!");
     const { crop, disabled, onChange, onDragStart } = this.props;
 
     if (disabled) {
+      console.log("disabled");
       return;
     }
 
     if (!this.mouseDownOnCrop) {
+      console.log("not_crop");
       return;
     }
     e.preventDefault(); // Stop drag selection.
-    if (!this.dragStarted) {
-      this.dragStarted = true;
-      onDragStart();
-    }
+    // if (!this.dragStarted) {
+    //   console.log("Not_started");
+    //   this.dragStarted = true;
+    //   onDragStart();
+    // }
 
     const { evData } = this;
     const clientPos = getClientPos(e);
-
+    console.log(evData);
     if (evData.isResize && crop.aspect && evData.cropOffset) {
       clientPos.y = this.straightenYPath(clientPos.x);
     }
@@ -484,13 +494,14 @@ class BoxCanvas extends PureComponent {
     } else {
       nextCrop = this.dragCrop();
     }
-
+    console.log(nextCrop);
     if (nextCrop !== crop) {
       onChange(nextCrop, getPixelCrop(this.imageRef, nextCrop));
     }
   };
 
   onDocMouseTouchEnd = () => {
+    console.log("END!!");
     const {
       crop,
       disabled,
@@ -516,7 +527,21 @@ class BoxCanvas extends PureComponent {
   };
 
   render() {
-    return <canvas ref="imgCanvas" />;
+    return (
+      <div
+        ref={ref => {
+          this.componentRef = ref;
+        }}
+      >
+        <canvas
+          ref={ref => {
+            this.imageRef = ref;
+          }}
+          onTouchStart={this.onComponentMouseTouchDown}
+          onMouseDown={this.onComponentMouseTouchDown}
+        />
+      </div>
+    );
   }
 }
 
