@@ -6,17 +6,53 @@ import * as PropTypes from "prop-types";
 import * as React from "react";
 import * as Point from "./Point";
 import * as Size from "./Size";
+import BoxCanvas from "../BoxCanvas";
+import { start } from "repl";
 
 const truncRound = (num: number): number => Math.trunc(num * 10000) / 10000;
 
 enum GUESTURE_TYPE {
   UNSET = "GUESTURE_TYPE_UNSET",
   PAN = "GUESTURE_TYPE_PAN",
-  PINCH = "GUESTURE_TYPE_PINCH"
+  PINCH = "GUESTURE_TYPE_PINCH",
+  DRAW = "GUESTURE_TYPE_DRAW",
+  RESIZE = "GUESTURE_TYPE_RESIZE"
+}
+
+type CanvasRect = {
+  pos : Point.Point,
+  width: number,
+  height: number
+}
+
+type CropOffset = {
+  top : number,
+  left : number
+}
+
+type CropRect = {
+  startPos: Point.Point,
+  startWidth: number,
+  startHeight: number,
+  xDif: number,
+  yDif: number,
+  xInversed: boolean,
+  yInversed: boolean,
+  xCrossOver: boolean,
+  yCrossover: boolean,
+  startXCrossOver: boolean,
+  startYCrossOver: boolean,
+  ord: string,
+  isResize: boolean,
+  offset: CropOffset
 }
 
 interface PinchToZoomProps {
+  src: string;
   debug: boolean;
+  moveMode: boolean;
+  canvRef: HTMLCanvasElement;
+  disableWork: boolean;
   className: string;
   minZoomScale: number;
   maxZoomScale: number;
@@ -26,7 +62,38 @@ interface PinchToZoomProps {
 
 interface PinchToZoomState {
   lastSingleTouchPoint: Point.Point;
+  startDrawTouchPoint: Point.Point;
+  endDrawTouchPoint: Point.Point;
+  zoomDrawTouchPoint: Point.Point;
+  zoomDrawFactor: number;
+  zoomResizeFactor: number;
+  zoomRect:CanvasRect;
+  prevRect:CanvasRect;
+  isRect: boolean;
+  ord: string;
+  drawIsActive: boolean;
+
 }
+
+function inverseOrd(ord: string) {
+  let inversedOrd;
+
+  if (ord === "n") inversedOrd = "s";
+  else if (ord === "ne") inversedOrd = "sw";
+  else if (ord === "e") inversedOrd = "w";
+  else if (ord === "se") inversedOrd = "nw";
+  else if (ord === "s") inversedOrd = "n";
+  else if (ord === "sw") inversedOrd = "ne";
+  else if (ord === "w") inversedOrd = "e";
+  else if (ord === "nw") inversedOrd = "se";
+
+  return inversedOrd;
+}
+
+function clamp(num: number, min: number, max: number) {
+  return Math.min(Math.max(num, min), max);
+}
+
 
 class CustomPinchToZoom extends React.Component<
   PinchToZoomProps,
@@ -99,13 +166,15 @@ class CustomPinchToZoom extends React.Component<
 
   public zoomAreaContainer?: HTMLDivElement;
   public zoomArea?: HTMLDivElement;
-
+  public canv =  React.createRef<HTMLCanvasElement>();
   private lastTime: number;
-  private moveMode: boolean;
+  private evData: CropRect;
+  private drawStarted: boolean;
+  private mouseDownOnCrop: boolean;
+  // private moveMode: boolean;
 
   constructor(props: PinchToZoomProps) {
     super(props);
-
     // instance variable: transform data
     this.transform = {
       zoomFactor: 1.0,
@@ -129,15 +198,53 @@ class CustomPinchToZoom extends React.Component<
     // instance variable: pan
     this.panStartPoint = Point.newOriginPoint();
     this.panStartTranslate = Point.newOriginPoint();
-
+    this.drawStarted = false;
+    this.mouseDownOnCrop = false;
+    this.evData = {
+      startPos: Point.newOriginPoint(),
+      startWidth: 0,
+      startHeight: 0,
+      xDif: 0,
+      yDif: 0,
+      xInversed: false,
+      yInversed: false,
+      xCrossOver: false,
+      yCrossover: false,
+      startXCrossOver: false,
+      startYCrossOver: false,
+      ord:"nw",
+      isResize: false,
+      offset: {
+        top:0,
+        left:0
+      }
+    }
     // record last touch point
     this.state = {
-      lastSingleTouchPoint: Point.newOriginPoint()
+      lastSingleTouchPoint: Point.newOriginPoint(),
+      isRect : false,
+      startDrawTouchPoint: Point.newOriginPoint(),
+      endDrawTouchPoint: Point.newOriginPoint(),
+      zoomDrawTouchPoint: Point.newOriginPoint(),
+      zoomDrawFactor: 1,
+      zoomResizeFactor: 1,
+      drawIsActive: false,
+      zoomRect: {
+        pos: Point.newOriginPoint(),
+        width: 0,
+        height: 0
+      },
+      prevRect: {
+        pos: Point.newOriginPoint(),
+        width: 0,
+        height: 0
+      },
+      ord: "nw"
     };
 
     // CUSTOM : for doubletap variable
     this.lastTime = -100000;
-    this.moveMode = false;
+
   }
 
   public componentDidUpdate(prevProps: PinchToZoomProps) {
@@ -217,38 +324,238 @@ class CustomPinchToZoom extends React.Component<
   */
 
   public onPanStart(syntheticEvent: React.SyntheticEvent) {
-    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
-    const { currentTranslate } = this.getTransform();
+    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent)
+    const { currentTranslate } = this.getTransform()
 
-    if (this.isBoxOrMove(syntheticEvent)) {
-      // something happened. (Move Mode)
-      this.moveMode = true;
-      return;
-    }
-
-    this.panStartPoint = p1;
-    this.panStartTranslate = currentTranslate;
+    this.panStartPoint = p1
+    this.panStartTranslate = currentTranslate
   }
 
   public onPanMove(syntheticEvent: React.SyntheticEvent) {
-    const [dragPoint] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
-    const { currentZoomFactor } = this.getTransform();
-    const origin = this.panStartPoint;
-    const prevTranslate = this.panStartTranslate;
+    const [dragPoint] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent)
+    const { currentZoomFactor } = this.getTransform()
+    const origin = this.panStartPoint
+    const prevTranslate = this.panStartTranslate
 
-    const dragOffset = Point.offset(dragPoint, origin);
-    const adjustedZoomOffset = Point.scale(dragOffset, 1 / currentZoomFactor);
-    const nextTranslate = Point.sum(adjustedZoomOffset, prevTranslate);
-    if (this.moveMode) {
-      // something happend. (Move Mode)
-      return;
-    }
-    this.panContentArea(nextTranslate);
+    const dragOffset = Point.offset(dragPoint, origin)
+    const adjustedZoomOffset = Point.scale(dragOffset, 1 / currentZoomFactor)
+    const nextTranslate = Point.sum(adjustedZoomOffset, prevTranslate)
+    this.panContentArea(nextTranslate)
   }
 
   public onPanEnd() {
-    this.moveMode = false;
-    this.guardZoomAreaTranslate();
+    this.guardZoomAreaTranslate()
+  }
+
+  public onDrawBoxStart(syntheticEvent: React.SyntheticEvent) {
+    const { moveMode } = this.props;
+    if (moveMode) {
+      return;
+    }
+    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
+
+    this.evData = {
+      startPos: p1,
+      offset: {
+        top: 0,
+        left: 0
+      },
+      startWidth: 0,
+      startHeight: 0,
+      xDif: 0,
+      yDif: 0,
+      xInversed: false,
+      yInversed: false,
+      xCrossOver: false,
+      yCrossover: false,
+      startXCrossOver: false,
+      startYCrossOver: false,
+      isResize: false,
+      ord: "nw"
+    };
+
+    this.mouseDownOnCrop = true;
+    this.setState({
+      drawIsActive: true
+    });
+
+  }
+  private straightenYPath(clientX: number): number {
+    const {evData} = this;
+    const { ord, offset } = evData;
+    const startWidth = 
+      (evData.startWidth / 100) * this.canv.current!.width | evData.startWidth;
+    const startHeight = 
+      (evData.startHeight / 100) * this.canv.current!.height | evData.startHeight;
+    let k;
+    let d;
+
+    if (ord === "nw" || ord === "se") {
+      k = startHeight / startWidth;
+      d = offset.top - offset.left * k;
+    } else {
+      k = -startHeight / startWidth;
+      d = offset.top + (startHeight - offset.left * k);
+    }
+    
+    return k * clientX + d;
+  }
+  public onDrawBoxMove(syntheticEvent: React.SyntheticEvent) {
+    const { moveMode } = this.props;
+    const { startDrawTouchPoint } = this.state;
+    if (moveMode || !this.mouseDownOnCrop) {
+      return;
+    }
+    const { evData } = this;
+    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
+
+    // I don`t know 
+    if (evData.isResize && evData.offset) {
+      p1.y = this.straightenYPath(p1.x);
+    }
+    new Promise<boolean>((res, rej) => {
+    res(true);
+    }).then(res=>{
+      this.setState({
+        endDrawTouchPoint: p1
+      });
+    }).then(res=>{
+      this.updateZoomRect(p1);
+    }).then(res=>{
+      this.drawRect();
+    }).catch(rej=>{
+      console.error('Error on Drawing Rectangle');
+    })
+    
+  }
+
+  private drawRect() {
+    console.log('drawing...')
+    const { zoomRect, prevRect,zoomDrawFactor } = this.state;
+    const { evData } = this;
+    const { offset } = evData;
+    let prevX, prevY;
+    prevX = evData.startWidth + evData.xDif
+    prevY = evData.startHeight + evData.yDif
+    const canvas = this.canv.current;
+    const ctx = canvas!.getContext("2d");
+    if (ctx) {
+      ctx.globalCompositeOperation='destination-over';
+      ctx.clearRect(offset.left, offset.top, prevX, prevY);
+      ctx.strokeRect(offset.left, offset.top, evData.startWidth, evData.startHeight);  
+    }
+    // this.zoomContentArea(zoomDrawFactor);
+  }
+  private getOffset() {
+    const { evData } = this;
+    const { ord, startPos } = evData;
+    let top, left;
+    top = ord.includes("s") ? startPos.y : startPos.y - evData.startHeight;
+    left = ord.includes("e") ? startPos.x : startPos.x - evData.startWidth;
+    
+    this.evData = {
+      ...this.evData,
+      offset : {
+        top : top,
+        left : left
+      }
+    }
+  }
+  private updateZoomRect(pos: Point.Point) {
+    const { evData } = this;
+    const { startPos, startHeight, startWidth } = evData;
+    let xInversed, yInversed, xDif, yDif;
+    let ord = "";
+    xDif = pos.x - startPos.x;
+    yDif = pos.y - startPos.y;
+    xInversed = xDif > 0 ? false : true;
+    yInversed = yDif > 0 ? false : true;
+
+    if (yInversed) {
+      ord += "n";
+    } else {
+      ord += "s";
+    }
+    if (xInversed) {
+      ord += "w";
+    } else {
+      ord += "e";
+    }
+    this.getOffset()
+    // crossOver Check
+    // calculate H/W
+    console.log(evData.offset)
+    this.evData = {
+      ...this.evData,
+      startHeight : Math.abs(yDif),
+      startWidth : Math.abs(xDif),
+      xDif: Math.abs(xDif) - startWidth,
+      yDif: Math.abs(xDif) - startHeight,
+      ord,
+      xInversed,
+      yInversed,
+    }
+    // const {{ zoomRect } = this.state;
+    // const { x: x1, y: y1 } = p1;
+    // const { x: x2, y: y2 } = p2;
+    // const xCrd = x1-x2 > 0 ? x2 : x1, yCrd = y1-y2 > 0 ? y1 : y2; // left, top
+    // const width = Math.abs(x1-x2), height = Math.abs(y1-y2);
+    // // Calculate ZoomDrawFactor !!!
+    // const nextRect = {
+    //   pos: {
+    //     x: x1,
+    //     y: y1
+    //   },
+    //   width,
+    //   height
+    // }
+    // console.log("prevRect : ", zoomRect);
+    // console.log("nextRect : ",nextRect);
+    // console.log("position : ", p2);
+    // this.setState({
+    //   zoomRect : nextRect,
+    //   prevRect : zoomRect
+    // })
+    // }
+  }
+  public refreshCanvas() {
+    const ctx = this.canv.current!.getContext("2d");
+    const canvas = ctx!.canvas;
+    canvas.height = document.documentElement.clientHeight * 0.7;
+    canvas.width = document.documentElement.clientWidth * 0.7;
+    var img = new Image();
+    img.src =
+      this.props.src;
+    img.onload = function() {
+      let final_width, final_height;
+      if (canvas.height * (img.width / img.height) < canvas.width) {
+        final_width = canvas.height * (img.width / img.height);
+        final_height = canvas.height;
+      } else {
+        final_width = canvas.width;
+        final_height = canvas.width * (img.height / img.width);
+      }
+      ctx!.drawImage(
+        img,
+        0,
+        0,
+        img.width,
+        img.height,
+        0,
+        0,
+        final_width,
+        final_height
+      );
+    }
+  }
+  public onDrawBoxEnd() {
+    this.setState({
+      drawIsActive : false
+    })
+    this.drawStarted = false;
+    this.mouseDownOnCrop = false;
+    //Zoom
+    //Set isRect True
   }
 
   public onPinchPanStart(syntheticEvent: React.SyntheticEvent) {
@@ -438,6 +745,7 @@ class CustomPinchToZoom extends React.Component<
       return;
     }
     const { nativeEvent } = syntheticEvent;
+    const { moveMode } = this.props;
     if (!(nativeEvent instanceof TouchEvent)) {
       return;
     }
@@ -452,8 +760,14 @@ class CustomPinchToZoom extends React.Component<
         /* don't allow pan if zoom factor === minZoomScale */
         const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
         this.setState({ lastSingleTouchPoint: p1 });
-        this.currentGesture = GUESTURE_TYPE.PAN;
-        this.onPanStart(syntheticEvent);
+        if (moveMode) {
+          this.currentGesture = GUESTURE_TYPE.PAN;
+          this.onPanStart(syntheticEvent);
+        }
+        else {
+          this.currentGesture = GUESTURE_TYPE.DRAW;
+          this.onDrawBoxStart(syntheticEvent);
+        }
       }
     }
   }
@@ -461,6 +775,8 @@ class CustomPinchToZoom extends React.Component<
   public handleTouchMove(syntheticEvent: React.SyntheticEvent) {
     // 2 touches == pinch, else all considered as pan
     const { nativeEvent } = syntheticEvent;
+    const { moveMode } = this.props
+
     if (!(nativeEvent instanceof TouchEvent)) {
       return;
     }
@@ -472,12 +788,16 @@ class CustomPinchToZoom extends React.Component<
         break;
       default:
         if (this.currentGesture === GUESTURE_TYPE.PAN) {
-          this.onPanMove(syntheticEvent);
+          if (moveMode) this.onPanMove(syntheticEvent);
+        }
+        else if (this.currentGesture === GUESTURE_TYPE.DRAW) {
+          this.onDrawBoxMove(syntheticEvent);
         }
     }
   }
 
   public handleTouchEnd(syntheticEvent: React.SyntheticEvent) {
+    const { moveMode } = this.props
     if (!this.zoomAreaContainer || !this.zoomArea) {
       return;
     }
@@ -486,7 +806,10 @@ class CustomPinchToZoom extends React.Component<
       this.onPinchPanEnd();
     }
     if (this.currentGesture === GUESTURE_TYPE.PAN) {
-      this.onPanEnd();
+      if( moveMode ) this.onPanEnd();
+    }
+    else if (this.currentGesture === GUESTURE_TYPE.DRAW) {
+      this.onDrawBoxEnd();
     }
     this.currentGesture = GUESTURE_TYPE.UNSET;
   }
@@ -593,7 +916,7 @@ class CustomPinchToZoom extends React.Component<
   */
 
   public render() {
-    const { debug, className, children } = this.props;
+    const { debug, disableWork, className, children } = this.props;
 
     const classNameList = ["", "pinch-to-zoom-container"];
 
@@ -613,16 +936,17 @@ class CustomPinchToZoom extends React.Component<
       perspective: 1000,
       width: "100%" // match `pinch-to-zoom-container` width
     };
+    const { canvRef } = this.props;
 
     if (debug) {
       classNameList.push("debug");
       containerInlineStyle.backgroundColor = "red";
     }
 
-    if (!children || typeof children !== "function") {
-      throw new Error(`ProgressiveImage requires a function as its only child`);
-    }
-    console.log(children);
+    // if (!children || typeof children !== "function") {
+    //   throw new Error(`ProgressiveImage requires a function as its only child`);
+    // }
+    // console.log(children);
     return (
       <div
         className={className.concat(classNameList.join(" "))}
@@ -641,7 +965,13 @@ class CustomPinchToZoom extends React.Component<
             this.zoomArea = c || undefined;
           }}
         >
-          {children(this.transform.zoomFactor)}
+          {/* {canvRef} */}
+          <BoxCanvas
+            style={{ position: "relative" }}
+            url={this.props.src}
+            canvRef = {this.canv}
+          />
+          {/* {children(this.transform.zoomFactor)} */}
         </div>
       </div>
     );
@@ -650,6 +980,7 @@ class CustomPinchToZoom extends React.Component<
 
 CustomPinchToZoom.defaultProps = {
   debug: false,
+  // moveMode: true,
   className: "",
   minZoomScale: 1.0,
   maxZoomScale: 4.0,
@@ -665,6 +996,9 @@ CustomPinchToZoom.defaultProps = {
 
 CustomPinchToZoom.propTypes = {
   debug: PropTypes.bool,
+  // moveMode: PropTypes.bool.isRequired,
+  isRect: PropTypes.bool,
+  disableWork: PropTypes.bool,
   className: PropTypes.string,
   minZoomScale: PropTypes.number,
   maxZoomScale: PropTypes.number,
@@ -680,7 +1014,7 @@ CustomPinchToZoom.propTypes = {
     width: PropTypes.number, // eslint-disable-line
     height: PropTypes.number // eslint-disable-line
   }),
-  children: PropTypes.node
+  children: PropTypes.func
 };
 
 export default CustomPinchToZoom;

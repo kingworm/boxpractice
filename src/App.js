@@ -13,7 +13,8 @@ const App = () => {
           <Link to="/">Box Labeling Task</Link>
         </header> */}
         <Router>
-          <CanvasMain path="/" />
+          {/* <CanvasMain path="/" /> */}
+          <BoxView path="/" />
         </Router>
       </div>
     </ThemeContext.Provider>

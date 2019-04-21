@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useContext } from "react";
-import Konva from "konva";
-import { Stage, Layer, Rect, Group } from "react-konva";
+import React from "react";
+// import Konva from "konva";
+import { Stage, Layer, Rect } from "react-konva";
+
 
 class Rectangle extends React.Component {
   constructor(props) {
