@@ -1,4 +1,4 @@
-import React, { PureComponent } from "react";
+import React, { PureComponent, Fragment } from "react";
 // import PropTypes from "prop-types";
 
 let passiveSupported = false;
@@ -218,18 +218,33 @@ class BoxCanvas extends PureComponent {
   state = {};
 
   lastScale = -1;
-  updateCanvas() {
-    if (!this.props.canvRef) return;
-    const ctx = this.props.canvRef.current.getContext("2d");
-    const canvas = ctx.canvas;
 
-    // set canvas size
+
+
+  constructor(props) {
+    super(props)
+    this.imgRef = React.createRef();
+
+  }
+  updateScale() {
+  }
+  componentDidMount() {
+    // const options = passiveSupported ? { passive: false } : false;
+    // this.imageRef = this.refs.canvas;
+    if (!this.imgRef) {
+      console.error('NO Image Reference')
+      return;
+    }
+    const ctx = this.imgRef.current.getContext("2d");
+    const canvas = ctx.canvas;
     canvas.height = document.documentElement.clientHeight * 0.7;
     canvas.width = document.documentElement.clientWidth * 0.7;
-
+    const ctx2 = this.props.canvRef.current.getContext("2d");
+    const canvas2 = ctx2.canvas;
+    canvas2.height = canvas.height;
+    canvas2.width = canvas.width;
     var img = new Image();
-    img.src =
-      this.props.url;
+    img.src = this.props.url;
     img.onload = function() {
       let final_width, final_height;
       if (canvas.height * (img.width / img.height) < canvas.width) {
@@ -239,6 +254,7 @@ class BoxCanvas extends PureComponent {
         final_width = canvas.width;
         final_height = canvas.width * (img.height / img.width);
       }
+      console.log(img);
       ctx.drawImage(
         img,
         0,
@@ -251,28 +267,57 @@ class BoxCanvas extends PureComponent {
         final_height
       );
     };
+    this.image = img;
   }
-  constructor(props) {
-    super(props)
+
+  updateCanvas() {
+    if (!this.props.canvRef) return;
+    const ctx = this.imgRef.current.getContext("2d");
+    const canvas = ctx.canvas;
+    // set canvas size
+    canvas.height = document.documentElement.clientHeight * 0.7;
+    canvas.width = document.documentElement.clientWidth * 0.7;
+    const ctx2 = this.props.canvRef.current.getContext("2d");
+    const canvas2 = ctx2.canvas;
+    canvas2.height = canvas.height;
+    canvas2.width = canvas.width;
+    this.img.onload = function() {
+      let final_width, final_height;
+      if (canvas.height * (this.img.width / this.img.height) < canvas.width) {
+        final_width = canvas.height * (this.img.width / this.img.height);
+        final_height = canvas.height;
+      } else {
+        final_width = canvas.width;
+        final_height = canvas.width * (this.img.height / this.img.width);
+      }
+      ctx.drawImage(
+        this.img,
+        0,
+        0,
+        this.img.width,
+        this.img.height,
+        0,
+        0,
+        final_width,
+        final_height
+      );
+    };
+    this.drawImage();
   }
-  updateScale() {
-  }
-  componentDidMount() {
-    const options = passiveSupported ? { passive: false } : false;
-    // this.imageRef = this.refs.canvas;
-    const canvas = this.props.canvRef.current;
-    const ctx = canvas.getContext("2d");
-    this.updateCanvas();
-  }
+
   componentWillUnmount() {
   }
 
   componentDidUpdate() {
     // this.updateCanvas();
   }
-  componentWillReceiveProps() {
+  componentWillReceiveProps(nextProps) {
+    const nextData = nextProps.evData;
+    const { evData } = this.props;
     // console.log(this.props.scale);
     // this.updateScale();
+    this.drawImage();
+    this.drawPath(nextData);
   }
 
   onDocMouseTouchMove (e) {
@@ -280,15 +325,83 @@ class BoxCanvas extends PureComponent {
     // console.log(pos)
 
   };
+  drawImage() {
+    const ctx = this.imgRef.current.getContext("2d");
+    const canvas = ctx.canvas;
+    this.img.onload = function() {
+      let final_width, final_height;
+      if (canvas.height * (this.img.width / this.img.height) < canvas.width) {
+        final_width = canvas.height * (this.img.width / this.img.height);
+        final_height = canvas.height;
+      } else {
+        final_width = canvas.width;
+        final_height = canvas.width * (this.img.height / this.img.width);
+      }
+      ctx.drawImage(
+        this.img,
+        0,
+        0,
+        this.img.width,
+        this.img.height,
+        0,
+        0,
+        final_width,
+        final_height
+      );
+    };
+  }
+  drawPath(evData) {
+    const { offset } = evData;
+    const ctx = this.props.canvRef.current.getContext("2d");
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.globalCompositeOperation = "source-over";
+
+    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+    ctx.beginPath();
+    ctx.moveTo(offset.left,offset.top);
+    ctx.lineTo(offset.left + evData.startWidth, offset.top);
+    ctx.lineTo(offset.left + evData.startWidth, offset.top + evData.startHeight);
+    ctx.lineTo(offset.left, offset.top + evData.startHeight);
+    ctx.lineTo(offset.left,offset.top);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
 
   render() {
     const {canvRef} = this.props
     return (
+      <Fragment>
         <canvas
-          ref={canvRef}
+          ref={this.imgRef}
+          style={{
+            zIndex:0,
+            position:"absolute",
+            left:0,
+            top:0,
+            backgorundColor: "transparent"
+
+          }}
           // onTouchStart={this.onComponentMouseTouchDown}
           // onMouseDown={this.onComponentMouseTouchDown}
-        />
+        >
+      1. This text is displayed if your browser does not support HTML5 Canvas.
+        </canvas>
+        <canvas
+          ref={canvRef}
+          style={{
+            zIndex:1,
+            position:"absolute",
+            left:0,
+            top:0,
+            backgorundColor: "transparent"
+          }}
+          // onTouchStart={this.onComponentMouseTouchDown}
+          // onMouseDown={this.onComponentMouseTouchDown}
+        >
+      2. This text is displayed if your browser does not support HTML5 Canvas.
+        </canvas>
+      </Fragment>
     );
   }
 }

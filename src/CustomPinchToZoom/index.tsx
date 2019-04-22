@@ -171,8 +171,7 @@ class CustomPinchToZoom extends React.Component<
   private evData: CropRect;
   private drawStarted: boolean;
   private mouseDownOnCrop: boolean;
-  // private moveMode: boolean;
-
+  public drawCanvas: Function;
   constructor(props: PinchToZoomProps) {
     super(props);
     // instance variable: transform data
@@ -244,7 +243,7 @@ class CustomPinchToZoom extends React.Component<
 
     // CUSTOM : for doubletap variable
     this.lastTime = -100000;
-
+    this.drawCanvas = () => {};
   }
 
   public componentDidUpdate(prevProps: PinchToZoomProps) {
@@ -430,7 +429,6 @@ class CustomPinchToZoom extends React.Component<
   }
 
   private drawRect() {
-    console.log('drawing...')
     const { zoomRect, prevRect,zoomDrawFactor } = this.state;
     const { evData } = this;
     const { offset } = evData;
@@ -440,9 +438,19 @@ class CustomPinchToZoom extends React.Component<
     const canvas = this.canv.current;
     const ctx = canvas!.getContext("2d");
     if (ctx) {
-      ctx.globalCompositeOperation='destination-over';
-      ctx.clearRect(offset.left, offset.top, prevX, prevY);
-      ctx.strokeRect(offset.left, offset.top, evData.startWidth, evData.startHeight);  
+      console.log('drawing...')
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.moveTo(offset.left,offset.top);
+      ctx.lineTo(offset.left + evData.startWidth, offset.top);
+      ctx.lineTo(offset.left + evData.startWidth, offset.top + evData.startHeight);
+      ctx.lineTo(offset.left, offset.top + evData.startHeight);
+      ctx.lineTo(offset.left,offset.top);
+      ctx.closePath();
+      ctx.stroke();
+      // ctx.globalCompositeOperation='destination-over';
+      // ctx.clearRect(offset.left, offset.top, prevX, prevY);
+      // ctx.strokeRect(offset.left, offset.top, evData.startWidth, evData.startHeight);  
     }
     // this.zoomContentArea(zoomDrawFactor);
   }
@@ -970,6 +978,8 @@ class CustomPinchToZoom extends React.Component<
             style={{ position: "relative" }}
             url={this.props.src}
             canvRef = {this.canv}
+            drawCanvas = {this.drawCanvas}
+            evData = {this.evData}
           />
           {/* {children(this.transform.zoomFactor)} */}
         </div>
@@ -991,7 +1001,7 @@ CustomPinchToZoom.defaultProps = {
   contentSize: {
     width: 100,
     height: 100
-  }
+  },
 };
 
 CustomPinchToZoom.propTypes = {
@@ -1014,7 +1024,7 @@ CustomPinchToZoom.propTypes = {
     width: PropTypes.number, // eslint-disable-line
     height: PropTypes.number // eslint-disable-line
   }),
-  children: PropTypes.func
+  children: PropTypes.func,
 };
 
 export default CustomPinchToZoom;
