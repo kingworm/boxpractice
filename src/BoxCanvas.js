@@ -270,45 +270,48 @@ class BoxCanvas extends PureComponent {
     this.image = img;
   }
 
-  updateCanvas() {
-    if (!this.props.canvRef) return;
-    const ctx = this.imgRef.current.getContext("2d");
-    const canvas = ctx.canvas;
-    // set canvas size
-    canvas.height = document.documentElement.clientHeight * 0.7;
-    canvas.width = document.documentElement.clientWidth * 0.7;
-    const ctx2 = this.props.canvRef.current.getContext("2d");
-    const canvas2 = ctx2.canvas;
-    canvas2.height = canvas.height;
-    canvas2.width = canvas.width;
-    this.img.onload = function() {
-      let final_width, final_height;
-      if (canvas.height * (this.img.width / this.img.height) < canvas.width) {
-        final_width = canvas.height * (this.img.width / this.img.height);
-        final_height = canvas.height;
-      } else {
-        final_width = canvas.width;
-        final_height = canvas.width * (this.img.height / this.img.width);
-      }
-      ctx.drawImage(
-        this.img,
-        0,
-        0,
-        this.img.width,
-        this.img.height,
-        0,
-        0,
-        final_width,
-        final_height
-      );
-    };
-    this.drawImage();
-  }
+  // updateCanvas() {
+  //   if (!this.props.canvRef) return;
+  //   const ctx = this.imgRef.current.getContext("2d");
+  //   const canvas = ctx.canvas;
+  //   // set canvas size
+  //   canvas.height = document.documentElement.clientHeight * 0.7;
+  //   canvas.width = document.documentElement.clientWidth * 0.7;
+  //   const ctx2 = this.props.canvRef.current.getContext("2d");
+  //   const canvas2 = ctx2.canvas;
+  //   canvas2.height = canvas.height;
+  //   canvas2.width = canvas.width;
+  //   this.img.onload = function() {
+  //     let final_width, final_height;
+  //     if (canvas.height * (this.img.width / this.img.height) < canvas.width) {
+  //       final_width = canvas.height * (this.img.width / this.img.height);
+  //       final_height = canvas.height;
+  //     } else {
+  //       final_width = canvas.width;
+  //       final_height = canvas.width * (this.img.height / this.img.width);
+  //     }
+  //     ctx.drawImage(
+  //       this.img,
+  //       0,
+  //       0,
+  //       this.img.width,
+  //       this.img.height,
+  //       0,
+  //       0,
+  //       final_width,
+  //       final_height
+  //     );
+  //   };
+  //   this.drawImage();
+  // }
 
   componentWillUnmount() {
   }
 
-  componentDidUpdate() {
+  componentDidUpdate(nextProps) {
+    const nextData = nextProps.evData;
+    this.drawPath(nextData);
+
     // this.updateCanvas();
   }
   componentWillReceiveProps(nextProps) {
@@ -316,8 +319,9 @@ class BoxCanvas extends PureComponent {
     const { evData } = this.props;
     // console.log(this.props.scale);
     // this.updateScale();
-    this.drawImage();
-    this.drawPath(nextData);
+    // this.drawImage();
+    // this.drawPath(evData);
+    // this.drawPath(nextData);
   }
 
   onDocMouseTouchMove (e) {
@@ -325,36 +329,37 @@ class BoxCanvas extends PureComponent {
     // console.log(pos)
 
   };
-  drawImage() {
-    const ctx = this.imgRef.current.getContext("2d");
-    const canvas = ctx.canvas;
-    this.img.onload = function() {
-      let final_width, final_height;
-      if (canvas.height * (this.img.width / this.img.height) < canvas.width) {
-        final_width = canvas.height * (this.img.width / this.img.height);
-        final_height = canvas.height;
-      } else {
-        final_width = canvas.width;
-        final_height = canvas.width * (this.img.height / this.img.width);
-      }
-      ctx.drawImage(
-        this.img,
-        0,
-        0,
-        this.img.width,
-        this.img.height,
-        0,
-        0,
-        final_width,
-        final_height
-      );
-    };
-  }
+  // drawImage() {
+  //   const ctx = this.imgRef.current.getContext("2d");
+  //   const canvas = ctx.canvas;
+  //   this.img.onload = function() {
+  //     let final_width, final_height;
+  //     if (canvas.height * (this.img.width / this.img.height) < canvas.width) {
+  //       final_width = canvas.height * (this.img.width / this.img.height);
+  //       final_height = canvas.height;
+  //     } else {
+  //       final_width = canvas.width;
+  //       final_height = canvas.width * (this.img.height / this.img.width);
+  //     }
+  //     ctx.drawImage(
+  //       this.img,
+  //       0,
+  //       0,
+  //       this.img.width,
+  //       this.img.height,
+  //       0,
+  //       0,
+  //       final_width,
+  //       final_height
+  //     );
+  //   };
+  // }
   drawPath(evData) {
+    console.log('drawing...');
     const { offset } = evData;
     const ctx = this.props.canvRef.current.getContext("2d");
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.globalCompositeOperation = "source-over";
+    // ctx.globalCompositeOperation = "destination-out";
+    // ctx.globalCompositeOperation = "source-over";
 
     ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
     ctx.beginPath();
@@ -371,12 +376,29 @@ class BoxCanvas extends PureComponent {
   render() {
     const {canvRef} = this.props
     return (
-      <Fragment>
+      <div
+      style={{
+        position:"relative"
+      }}>
+        <canvas
+          ref={canvRef}
+          style={{
+            zIndex:1,
+            position:"absolute",
+            backgroundColor: 'transparent',
+            left:0,
+            top:0,
+          }}
+          // onTouchStart={this.onComponentMouseTouchDown}
+          // onMouseDown={this.onComponentMouseTouchDown}
+        >
+      2. This text is displayed if your browser does not support HTML5 Canvas.
+        </canvas>
         <canvas
           ref={this.imgRef}
           style={{
             zIndex:0,
-            position:"absolute",
+            // position:"absolute",
             left:0,
             top:0,
             backgorundColor: "transparent"
@@ -387,21 +409,7 @@ class BoxCanvas extends PureComponent {
         >
       1. This text is displayed if your browser does not support HTML5 Canvas.
         </canvas>
-        <canvas
-          ref={canvRef}
-          style={{
-            zIndex:1,
-            position:"absolute",
-            left:0,
-            top:0,
-            backgorundColor: "transparent"
-          }}
-          // onTouchStart={this.onComponentMouseTouchDown}
-          // onMouseDown={this.onComponentMouseTouchDown}
-        >
-      2. This text is displayed if your browser does not support HTML5 Canvas.
-        </canvas>
-      </Fragment>
+      </div>
     );
   }
 }

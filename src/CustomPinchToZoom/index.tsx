@@ -348,7 +348,8 @@ class CustomPinchToZoom extends React.Component<
 
   public onDrawBoxStart(syntheticEvent: React.SyntheticEvent) {
     const { moveMode } = this.props;
-    if (moveMode) {
+    const { isRect } = this.state;
+    if (moveMode || isRect) {
       return;
     }
     const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
@@ -401,8 +402,8 @@ class CustomPinchToZoom extends React.Component<
   }
   public onDrawBoxMove(syntheticEvent: React.SyntheticEvent) {
     const { moveMode } = this.props;
-    const { startDrawTouchPoint } = this.state;
-    if (moveMode || !this.mouseDownOnCrop) {
+    const { isRect } = this.state;
+    if (moveMode || !this.mouseDownOnCrop || isRect) {
       return;
     }
     const { evData } = this;
@@ -421,7 +422,7 @@ class CustomPinchToZoom extends React.Component<
     }).then(res=>{
       this.updateZoomRect(p1);
     }).then(res=>{
-      this.drawRect();
+      // this.drawRect();
     }).catch(rej=>{
       console.error('Error on Drawing Rectangle');
     })
@@ -437,21 +438,21 @@ class CustomPinchToZoom extends React.Component<
     prevY = evData.startHeight + evData.yDif
     const canvas = this.canv.current;
     const ctx = canvas!.getContext("2d");
-    if (ctx) {
-      console.log('drawing...')
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.beginPath();
-      ctx.moveTo(offset.left,offset.top);
-      ctx.lineTo(offset.left + evData.startWidth, offset.top);
-      ctx.lineTo(offset.left + evData.startWidth, offset.top + evData.startHeight);
-      ctx.lineTo(offset.left, offset.top + evData.startHeight);
-      ctx.lineTo(offset.left,offset.top);
-      ctx.closePath();
-      ctx.stroke();
-      // ctx.globalCompositeOperation='destination-over';
-      // ctx.clearRect(offset.left, offset.top, prevX, prevY);
-      // ctx.strokeRect(offset.left, offset.top, evData.startWidth, evData.startHeight);  
-    }
+    // if (ctx) {
+    //   console.log('drawing...')
+    //   ctx.globalCompositeOperation = "destination-out";
+    //   ctx.beginPath();
+    //   ctx.moveTo(offset.left,offset.top);
+    //   ctx.lineTo(offset.left + evData.startWidth, offset.top);
+    //   ctx.lineTo(offset.left + evData.startWidth, offset.top + evData.startHeight);
+    //   ctx.lineTo(offset.left, offset.top + evData.startHeight);
+    //   ctx.lineTo(offset.left,offset.top);
+    //   ctx.closePath();
+    //   ctx.stroke();
+    //   // ctx.globalCompositeOperation='destination-over';
+    //   // ctx.clearRect(offset.left, offset.top, prevX, prevY);
+    //   // ctx.strokeRect(offset.left, offset.top, evData.startWidth, evData.startHeight);  
+    // }
     // this.zoomContentArea(zoomDrawFactor);
   }
   private getOffset() {
@@ -557,13 +558,112 @@ class CustomPinchToZoom extends React.Component<
     }
   }
   public onDrawBoxEnd() {
+    const { evData } = this;
+    const { offset } = evData;
+    const { isRect } = this.state;
+    if ( isRect ) {
+      return;
+    }
     this.setState({
-      drawIsActive : false
+      drawIsActive : false,
+      isRect: true,
     })
     this.drawStarted = false;
     this.mouseDownOnCrop = false;
     //Zoom
+    let midX, midY;
+    midX = offset.left + evData.startWidth / 2;
+    midY = offset.top + evData.startHeight / 2;
+
+    // this.autoZoomToPosition({ x: midX, y: midY })
     //Set isRect True
+  }
+  
+  public onResizeBoxStart(syntheticEvent: React.SyntheticEvent) {
+    //block
+    if (!this.state.isRect || this.props.moveMode) {
+      console.log('Resize Not starting...')
+      return;
+    }
+    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
+    let ord = "";
+    console.log(p1);
+    const { evData } = this;
+    const { offset } = evData;
+    let midX, midY;
+    midX = offset.left + evData.startWidth / 2;
+    midY = offset.top + evData.startHeight / 2;
+    if (midY > p1.y) ord += "n"; else ord += "s";
+    if (midX > p1.x) ord += "w"; else ord += "e";
+    console.log("ord : ", ord);
+    this.evData = {
+      ...this.evData,
+      startPos : p1,
+      isResize : true,
+      ord,
+      xDif : 0,
+      yDif : 0,
+      xInversed: false,
+      yInversed: false,
+      xCrossOver: false,
+      yCrossover: false,
+      startXCrossOver: false,
+      startYCrossOver: false,
+      offset
+    }
+
+    this.mouseDownOnCrop = true;
+  }
+
+  public onResizeBoxMove(syntheticEvent: React.SyntheticEvent) {
+    // block
+    if (!this.state.isRect || !this.mouseDownOnCrop || this.props.moveMode ) {
+      return;
+    }
+    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
+    const { evData } = this;
+    const { startPos, ord } = evData;
+    let xDif, yDif;
+    xDif = p1.x - startPos.x; 
+    yDif = p1.y - startPos.y;
+    let newOffset = evData.offset;
+    let newWidth = evData.startWidth, newHeight = evData.startHeight;
+    if (ord.includes("w")) {
+      newOffset.left += xDif;
+      newWidth -= xDif;
+    } else {
+      newWidth += xDif;
+    }
+    if (ord.includes("n")) {
+      newHeight -= yDif;
+      newOffset.top += yDif;
+    } else {
+      newHeight += yDif;
+    }
+    this.evData = {
+      ...this.evData,
+      startPos: p1,
+      xDif,
+      yDif,
+      offset: newOffset,
+      startHeight: newHeight,
+      startWidth: newWidth
+    };
+  }
+
+  public onResizeBoxEnd() {
+    const { evData } = this;
+    const { offset } = evData;
+    const { currentZoomFactor } = this.getTransform();
+    this.mouseDownOnCrop = false;
+    //set default with (isResize), drawStarted?
+    //zoom
+    let midX, midY;
+    midX = offset.left + evData.startWidth / 2;
+    midY = offset.top + evData.startHeight / 2;
+    console.log(currentZoomFactor);
+    // this.autoZoomToPosition({ x: midX, y: midY })
+
   }
 
   public onPinchPanStart(syntheticEvent: React.SyntheticEvent) {
@@ -754,6 +854,7 @@ class CustomPinchToZoom extends React.Component<
     }
     const { nativeEvent } = syntheticEvent;
     const { moveMode } = this.props;
+    const { isRect } = this.state;
     if (!(nativeEvent instanceof TouchEvent)) {
       return;
     }
@@ -772,7 +873,10 @@ class CustomPinchToZoom extends React.Component<
           this.currentGesture = GUESTURE_TYPE.PAN;
           this.onPanStart(syntheticEvent);
         }
-        else {
+        else if (isRect) {
+          this.currentGesture = GUESTURE_TYPE.RESIZE;
+          this.onResizeBoxStart(syntheticEvent);
+        } else {
           this.currentGesture = GUESTURE_TYPE.DRAW;
           this.onDrawBoxStart(syntheticEvent);
         }
@@ -784,7 +888,7 @@ class CustomPinchToZoom extends React.Component<
     // 2 touches == pinch, else all considered as pan
     const { nativeEvent } = syntheticEvent;
     const { moveMode } = this.props
-
+    const { isRect } = this.state;
     if (!(nativeEvent instanceof TouchEvent)) {
       return;
     }
@@ -799,13 +903,19 @@ class CustomPinchToZoom extends React.Component<
           if (moveMode) this.onPanMove(syntheticEvent);
         }
         else if (this.currentGesture === GUESTURE_TYPE.DRAW) {
-          this.onDrawBoxMove(syntheticEvent);
+            this.onDrawBoxMove(syntheticEvent);
+        }
+        else if (this.currentGesture === GUESTURE_TYPE.RESIZE) {
+          if (isRect) {
+            this.onResizeBoxMove(syntheticEvent);
+          }
         }
     }
   }
 
   public handleTouchEnd(syntheticEvent: React.SyntheticEvent) {
     const { moveMode } = this.props
+    const { isRect } = this.state;
     if (!this.zoomAreaContainer || !this.zoomArea) {
       return;
     }
@@ -817,7 +927,11 @@ class CustomPinchToZoom extends React.Component<
       if( moveMode ) this.onPanEnd();
     }
     else if (this.currentGesture === GUESTURE_TYPE.DRAW) {
-      this.onDrawBoxEnd();
+        this.onDrawBoxEnd();
+    } else if (this.currentGesture === GUESTURE_TYPE.RESIZE) {
+      if (isRect) {
+        this.onResizeBoxEnd();
+      } 
     }
     this.currentGesture = GUESTURE_TYPE.UNSET;
   }
