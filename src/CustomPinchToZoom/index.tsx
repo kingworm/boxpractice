@@ -36,6 +36,8 @@ type CropRect = {
   startHeight: number,
   xDif: number,
   yDif: number,
+  midX: number,
+  midY: number,
   xInversed: boolean,
   yInversed: boolean,
   xCrossOver: boolean,
@@ -205,6 +207,8 @@ class CustomPinchToZoom extends React.Component<
       startHeight: 0,
       xDif: 0,
       yDif: 0,
+      midX: 0,
+      midY: 0,
       xInversed: false,
       yInversed: false,
       xCrossOver: false,
@@ -364,6 +368,8 @@ class CustomPinchToZoom extends React.Component<
       startHeight: 0,
       xDif: 0,
       yDif: 0,
+      midX: 0,
+      midY: 0,
       xInversed: false,
       yInversed: false,
       xCrossOver: false,
@@ -429,32 +435,32 @@ class CustomPinchToZoom extends React.Component<
     
   }
 
-  private drawRect() {
-    const { zoomRect, prevRect,zoomDrawFactor } = this.state;
-    const { evData } = this;
-    const { offset } = evData;
-    let prevX, prevY;
-    prevX = evData.startWidth + evData.xDif
-    prevY = evData.startHeight + evData.yDif
-    const canvas = this.canv.current;
-    const ctx = canvas!.getContext("2d");
-    // if (ctx) {
-    //   console.log('drawing...')
-    //   ctx.globalCompositeOperation = "destination-out";
-    //   ctx.beginPath();
-    //   ctx.moveTo(offset.left,offset.top);
-    //   ctx.lineTo(offset.left + evData.startWidth, offset.top);
-    //   ctx.lineTo(offset.left + evData.startWidth, offset.top + evData.startHeight);
-    //   ctx.lineTo(offset.left, offset.top + evData.startHeight);
-    //   ctx.lineTo(offset.left,offset.top);
-    //   ctx.closePath();
-    //   ctx.stroke();
-    //   // ctx.globalCompositeOperation='destination-over';
-    //   // ctx.clearRect(offset.left, offset.top, prevX, prevY);
-    //   // ctx.strokeRect(offset.left, offset.top, evData.startWidth, evData.startHeight);  
-    // }
-    // this.zoomContentArea(zoomDrawFactor);
-  }
+  // private drawRect() {
+  //   const { zoomRect, prevRect,zoomDrawFactor } = this.state;
+  //   const { evData } = this;
+  //   const { offset } = evData;
+  //   let prevX, prevY;
+  //   prevX = evData.startWidth + evData.xDif
+  //   prevY = evData.startHeight + evData.yDif
+  //   const canvas = this.canv.current;
+  //   const ctx = canvas!.getContext("2d");
+  //   if (ctx) {
+  //     console.log('drawing...')
+  //     ctx.globalCompositeOperation = "destination-out";
+  //     ctx.beginPath();
+  //     ctx.moveTo(offset.left,offset.top);
+  //     ctx.lineTo(offset.left + evData.startWidth, offset.top);
+  //     ctx.lineTo(offset.left + evData.startWidth, offset.top + evData.startHeight);
+  //     ctx.lineTo(offset.left, offset.top + evData.startHeight);
+  //     ctx.lineTo(offset.left,offset.top);
+  //     ctx.closePath();
+  //     ctx.stroke();
+  //     // ctx.globalCompositeOperation='destination-over';
+  //     // ctx.clearRect(offset.left, offset.top, prevX, prevY);
+  //     // ctx.strokeRect(offset.left, offset.top, evData.startWidth, evData.startHeight);  
+  //   }
+  //   this.zoomContentArea(zoomDrawFactor);
+  // }
   private getOffset() {
     const { evData } = this;
     const { ord, startPos } = evData;
@@ -493,7 +499,7 @@ class CustomPinchToZoom extends React.Component<
     this.getOffset()
     // crossOver Check
     // calculate H/W
-    console.log(evData.offset)
+    // console.log(evData.offset)
     this.evData = {
       ...this.evData,
       startHeight : Math.abs(yDif),
@@ -504,59 +510,38 @@ class CustomPinchToZoom extends React.Component<
       xInversed,
       yInversed,
     }
-    // const {{ zoomRect } = this.state;
-    // const { x: x1, y: y1 } = p1;
-    // const { x: x2, y: y2 } = p2;
-    // const xCrd = x1-x2 > 0 ? x2 : x1, yCrd = y1-y2 > 0 ? y1 : y2; // left, top
-    // const width = Math.abs(x1-x2), height = Math.abs(y1-y2);
-    // // Calculate ZoomDrawFactor !!!
-    // const nextRect = {
-    //   pos: {
-    //     x: x1,
-    //     y: y1
-    //   },
-    //   width,
-    //   height
-    // }
-    // console.log("prevRect : ", zoomRect);
-    // console.log("nextRect : ",nextRect);
-    // console.log("position : ", p2);
-    // this.setState({
-    //   zoomRect : nextRect,
-    //   prevRect : zoomRect
-    // })
-    // }
   }
-  public refreshCanvas() {
-    const ctx = this.canv.current!.getContext("2d");
-    const canvas = ctx!.canvas;
-    canvas.height = document.documentElement.clientHeight * 0.7;
-    canvas.width = document.documentElement.clientWidth * 0.7;
-    var img = new Image();
-    img.src =
-      this.props.src;
-    img.onload = function() {
-      let final_width, final_height;
-      if (canvas.height * (img.width / img.height) < canvas.width) {
-        final_width = canvas.height * (img.width / img.height);
-        final_height = canvas.height;
-      } else {
-        final_width = canvas.width;
-        final_height = canvas.width * (img.height / img.width);
-      }
-      ctx!.drawImage(
-        img,
-        0,
-        0,
-        img.width,
-        img.height,
-        0,
-        0,
-        final_width,
-        final_height
-      );
-    }
-  }
+  // public refreshCanvas() {
+  //   const ctx = this.canv.current!.getContext("2d");
+  //   const canvas = ctx!.canvas;
+  //   canvas.height = document.documentElement.clientHeight * 0.7;
+  //   canvas.width = document.documentElement.clientWidth * 0.7;
+  //   var img = new Image();
+  //   img.src =
+  //     this.props.src;
+  //   img.onload = function() {
+  //     let final_width, final_height;
+  //     if (canvas.height * (img.width / img.height) < canvas.width) {
+  //       final_width = canvas.height * (img.width / img.height);
+  //       final_height = canvas.height;
+  //     } else {
+  //       final_width = canvas.width;
+  //       final_height = canvas.width * (img.height / img.width);
+  //     }
+  //     ctx!.drawImage(
+  //       img,
+  //       0,
+  //       0,
+  //       img.width,
+  //       img.height,
+  //       0,
+  //       0,
+  //       final_width,
+  //       final_height
+  //     );
+  //   }
+  // }
+
   public onDrawBoxEnd() {
     const { evData } = this;
     const { offset } = evData;
@@ -574,8 +559,10 @@ class CustomPinchToZoom extends React.Component<
     let midX, midY;
     midX = offset.left + evData.startWidth / 2;
     midY = offset.top + evData.startHeight / 2;
-
-    // this.autoZoomToPosition({ x: midX, y: midY })
+    console.log(evData.midX - midX);
+    console.log(evData.midY - midY);
+    // zoomFactor == 2
+    this.autoZoomToPosition({ x: midX, y: midY })
     //Set isRect True
   }
   
@@ -588,6 +575,7 @@ class CustomPinchToZoom extends React.Component<
     const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
     let ord = "";
     console.log(p1);
+
     const { evData } = this;
     const { offset } = evData;
     let midX, midY;
@@ -595,7 +583,7 @@ class CustomPinchToZoom extends React.Component<
     midY = offset.top + evData.startHeight / 2;
     if (midY > p1.y) ord += "n"; else ord += "s";
     if (midX > p1.x) ord += "w"; else ord += "e";
-    console.log("ord : ", ord);
+    // console.log("ord : ", ord);
     this.evData = {
       ...this.evData,
       startPos : p1,
@@ -603,6 +591,8 @@ class CustomPinchToZoom extends React.Component<
       ord,
       xDif : 0,
       yDif : 0,
+      midX,
+      midY,
       xInversed: false,
       yInversed: false,
       xCrossOver: false,
@@ -624,13 +614,17 @@ class CustomPinchToZoom extends React.Component<
     const { evData } = this;
     const { startPos, ord } = evData;
     let xDif, yDif;
-    xDif = p1.x - startPos.x; 
-    yDif = p1.y - startPos.y;
+    xDif = (p1.x - startPos.x) * 0.71; 
+    yDif = (p1.y - startPos.y) * 0.71;
     let newOffset = evData.offset;
     let newWidth = evData.startWidth, newHeight = evData.startHeight;
+    // left, top을 변경시킬 때, 박스가 흔들리는 부분 수정해주어야 함.
     if (ord.includes("w")) {
+      let right = evData.offset.left + evData.startWidth
+      right -= xDif;
+      newWidth = right - evData.offset.left;
       newOffset.left += xDif;
-      newWidth -= xDif;
+      // newWidth -= xDif;
     } else {
       newWidth += xDif;
     }
@@ -640,15 +634,27 @@ class CustomPinchToZoom extends React.Component<
     } else {
       newHeight += yDif;
     }
+    // add update ord.
+    let midX, midY, newOrd="";
+    midX = newOffset.left + newWidth / 2;
+    midY = newOffset.top + newHeight / 2;
+    // if (midY > p1.y) newOrd += "n"; else newOrd += "s";
+    // if (midX > p1.x) newOrd += "w"; else newOrd += "e";
     this.evData = {
       ...this.evData,
       startPos: p1,
+      midX,
+      midY,
+      // ord: newOrd,
       xDif,
       yDif,
       offset: newOffset,
       startHeight: newHeight,
       startWidth: newWidth
     };
+    this.setState({
+      lastSingleTouchPoint: p1
+    });
   }
 
   public onResizeBoxEnd() {
@@ -661,8 +667,17 @@ class CustomPinchToZoom extends React.Component<
     let midX, midY;
     midX = offset.left + evData.startWidth / 2;
     midY = offset.top + evData.startHeight / 2;
+    this.evData = {
+      ...this.evData,
+      midX,
+      midY,
+    }
+    this.setState({
+      drawIsActive: false
+    })
     console.log(currentZoomFactor);
-    // this.autoZoomToPosition({ x: midX, y: midY })
+    this.autoZoomToPosition({ x: midX, y: midY })
+    console.log(offset)
 
   }
 
@@ -1059,7 +1074,7 @@ class CustomPinchToZoom extends React.Component<
       width: "100%" // match `pinch-to-zoom-container` width
     };
     const { canvRef } = this.props;
-
+    // console.log(this.evData);
     if (debug) {
       classNameList.push("debug");
       containerInlineStyle.backgroundColor = "red";

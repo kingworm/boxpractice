@@ -310,7 +310,7 @@ class BoxCanvas extends PureComponent {
 
   componentDidUpdate(nextProps) {
     const nextData = nextProps.evData;
-    this.drawPath(nextData);
+    // this.drawPath(nextData);
 
     // this.updateCanvas();
   }
@@ -320,7 +320,7 @@ class BoxCanvas extends PureComponent {
     // console.log(this.props.scale);
     // this.updateScale();
     // this.drawImage();
-    // this.drawPath(evData);
+    this.drawPath(evData);
     // this.drawPath(nextData);
   }
 
@@ -360,15 +360,38 @@ class BoxCanvas extends PureComponent {
     const ctx = this.props.canvRef.current.getContext("2d");
     // ctx.globalCompositeOperation = "destination-out";
     // ctx.globalCompositeOperation = "source-over";
+    let midX, midY;
+    midX = offset.left + evData.startWidth / 2;
+    midY = offset.top + evData.startHeight / 2;
 
     ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+
     ctx.beginPath();
+    ctx.setLineDash([10,10]);
+    ctx.moveTo(midX, 0);
+    ctx.lineTo(midX, ctx.canvas.height);
+    ctx.closePath();
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.setLineDash([10,10]);
+    ctx.moveTo(0, midY);
+    ctx.lineTo(ctx.canvas.width, midY);
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.setLineDash([]);
     ctx.moveTo(offset.left,offset.top);
     ctx.lineTo(offset.left + evData.startWidth, offset.top);
     ctx.lineTo(offset.left + evData.startWidth, offset.top + evData.startHeight);
     ctx.lineTo(offset.left, offset.top + evData.startHeight);
     ctx.lineTo(offset.left,offset.top);
     ctx.closePath();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(evData.midX, evData.midY, 5, 0, 2 * Math.PI);
     ctx.stroke();
   }
 
