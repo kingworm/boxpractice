@@ -34,6 +34,9 @@ type CropRect = {
   startPos: Point.Point,
   startWidth: number,
   startHeight: number,
+  absPos: Point.Point,
+  absWidth: number,
+  absHeight: number,
   xDif: number,
   yDif: number,
   midX: number,
@@ -205,6 +208,9 @@ class CustomPinchToZoom extends React.Component<
       startPos: Point.newOriginPoint(),
       startWidth: 0,
       startHeight: 0,
+      absPos: Point.newOriginPoint(),
+      absWidth: 0,
+      absHeight: 0,
       xDif: 0,
       yDif: 0,
       midX: 0,
@@ -360,6 +366,9 @@ class CustomPinchToZoom extends React.Component<
 
     this.evData = {
       startPos: p1,
+      absPos: p1,
+      absWidth: 0,
+      absHeight: 0,
       offset: {
         top: 0,
         left: 0
@@ -559,8 +568,7 @@ class CustomPinchToZoom extends React.Component<
     let midX, midY;
     midX = offset.left + evData.startWidth / 2;
     midY = offset.top + evData.startHeight / 2;
-    console.log(evData.midX - midX);
-    console.log(evData.midY - midY);
+    console.log(offset);
     // zoomFactor == 2
     this.autoZoomToPosition({ x: midX, y: midY })
     //Set isRect True
@@ -638,6 +646,8 @@ class CustomPinchToZoom extends React.Component<
     let midX, midY, newOrd="";
     midX = newOffset.left + newWidth / 2;
     midY = newOffset.top + newHeight / 2;
+
+    console.log(midX,midY,p1,newOffset,ord)
     // if (midY > p1.y) newOrd += "n"; else newOrd += "s";
     // if (midX > p1.x) newOrd += "w"; else newOrd += "e";
     this.evData = {

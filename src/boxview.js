@@ -163,6 +163,7 @@ class BoxView extends React.Component {
               );
             }} */}
           </CustomPinchToZoom>
+          <input type="text" defaultValue="Move/Draw" />
         </div>
       </React.Fragment>
     );
