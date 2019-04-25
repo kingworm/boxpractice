@@ -8,6 +8,7 @@ import * as Point from "./Point";
 import * as Size from "./Size";
 import BoxCanvas from "../BoxCanvas";
 import { start } from "repl";
+import { Canvas } from "konva/types/Canvas";
 
 const truncRound = (num: number): number => Math.trunc(num * 10000) / 10000;
 
@@ -444,32 +445,6 @@ class CustomPinchToZoom extends React.Component<
     
   }
 
-  // private drawRect() {
-  //   const { zoomRect, prevRect,zoomDrawFactor } = this.state;
-  //   const { evData } = this;
-  //   const { offset } = evData;
-  //   let prevX, prevY;
-  //   prevX = evData.startWidth + evData.xDif
-  //   prevY = evData.startHeight + evData.yDif
-  //   const canvas = this.canv.current;
-  //   const ctx = canvas!.getContext("2d");
-  //   if (ctx) {
-  //     console.log('drawing...')
-  //     ctx.globalCompositeOperation = "destination-out";
-  //     ctx.beginPath();
-  //     ctx.moveTo(offset.left,offset.top);
-  //     ctx.lineTo(offset.left + evData.startWidth, offset.top);
-  //     ctx.lineTo(offset.left + evData.startWidth, offset.top + evData.startHeight);
-  //     ctx.lineTo(offset.left, offset.top + evData.startHeight);
-  //     ctx.lineTo(offset.left,offset.top);
-  //     ctx.closePath();
-  //     ctx.stroke();
-  //     // ctx.globalCompositeOperation='destination-over';
-  //     // ctx.clearRect(offset.left, offset.top, prevX, prevY);
-  //     // ctx.strokeRect(offset.left, offset.top, evData.startWidth, evData.startHeight);  
-  //   }
-  //   this.zoomContentArea(zoomDrawFactor);
-  // }
   private getOffset() {
     const { evData } = this;
     const { ord, startPos } = evData;
@@ -506,9 +481,6 @@ class CustomPinchToZoom extends React.Component<
       ord += "e";
     }
     this.getOffset()
-    // crossOver Check
-    // calculate H/W
-    // console.log(evData.offset)
     this.evData = {
       ...this.evData,
       startHeight : Math.abs(yDif),
@@ -520,37 +492,7 @@ class CustomPinchToZoom extends React.Component<
       yInversed,
     }
   }
-  // public refreshCanvas() {
-  //   const ctx = this.canv.current!.getContext("2d");
-  //   const canvas = ctx!.canvas;
-  //   canvas.height = document.documentElement.clientHeight * 0.7;
-  //   canvas.width = document.documentElement.clientWidth * 0.7;
-  //   var img = new Image();
-  //   img.src =
-  //     this.props.src;
-  //   img.onload = function() {
-  //     let final_width, final_height;
-  //     if (canvas.height * (img.width / img.height) < canvas.width) {
-  //       final_width = canvas.height * (img.width / img.height);
-  //       final_height = canvas.height;
-  //     } else {
-  //       final_width = canvas.width;
-  //       final_height = canvas.width * (img.height / img.width);
-  //     }
-  //     ctx!.drawImage(
-  //       img,
-  //       0,
-  //       0,
-  //       img.width,
-  //       img.height,
-  //       0,
-  //       0,
-  //       final_width,
-  //       final_height
-  //     );
-  //   }
-  // }
-
+  
   public onDrawBoxEnd() {
     const { evData } = this;
     const { offset } = evData;
@@ -564,14 +506,19 @@ class CustomPinchToZoom extends React.Component<
     })
     this.drawStarted = false;
     this.mouseDownOnCrop = false;
-    //Zoom
-    let midX, midY;
+    let midX, midY, absRect:CanvasRect;
     midX = offset.left + evData.startWidth / 2;
     midY = offset.top + evData.startHeight / 2;
-    console.log(offset);
-    // zoomFactor == 2
+    absRect = this.getAbsoluteTransform(evData.startPos,evData.startWidth,evData.startHeight);
+    this.evData = {
+      ...this.evData,
+      absPos: absRect.pos,
+      absHeight: absRect.width,
+      absWidth: absRect.height,
+      midX,
+      midY
+    }
     this.autoZoomToPosition({ x: midX, y: midY })
-    //Set isRect True
   }
   
   public onResizeBoxStart(syntheticEvent: React.SyntheticEvent) {
@@ -670,7 +617,7 @@ class CustomPinchToZoom extends React.Component<
   public onResizeBoxEnd() {
     const { evData } = this;
     const { offset } = evData;
-    const { currentZoomFactor } = this.getTransform();
+    const { currentZoomFactor, currentTranslate } = this.getTransform();
     this.mouseDownOnCrop = false;
     //set default with (isResize), drawStarted?
     //zoom
@@ -685,11 +632,32 @@ class CustomPinchToZoom extends React.Component<
     this.setState({
       drawIsActive: false
     })
-    console.log(currentZoomFactor);
+
+    console.log(currentZoomFactor, currentTranslate);
     this.autoZoomToPosition({ x: midX, y: midY })
-    console.log(offset)
+    // console.log(offset)
 
   }
+
+  public getAbsoluteTransform(pos: Point.Point, width:number, height:number) : CanvasRect {
+    const { currentZoomFactor, currentTranslate } = this.getTransform();
+    let absX, absY, absWidth, absHeight;
+    if (!currentZoomFactor) return {pos, width, height};
+    absX = pos.x - currentTranslate.x;
+    absX /= currentZoomFactor;
+    absY = pos.x - currentTranslate.x;
+    absY /= currentZoomFactor;
+    absWidth = width/currentZoomFactor;
+    absHeight = height/currentZoomFactor;
+    return {
+      pos: {x:absX, y:absY},
+      width: absWidth,
+      height: absHeight
+    };
+  }
+
+  public getRelativeTransform(pos: Point.Point, width:number, height:number) {}
+
 
   public onPinchPanStart(syntheticEvent: React.SyntheticEvent) {
     const [p1, p2] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
