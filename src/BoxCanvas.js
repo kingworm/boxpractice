@@ -218,9 +218,6 @@ class BoxCanvas extends PureComponent {
   state = {};
 
   lastScale = -1;
-
-
-
   constructor(props) {
     super(props)
     this.imgRef = React.createRef();
@@ -229,8 +226,6 @@ class BoxCanvas extends PureComponent {
   updateScale() {
   }
   componentDidMount() {
-    // const options = passiveSupported ? { passive: false } : false;
-    // this.imageRef = this.refs.canvas;
     if (!this.imgRef) {
       console.error('NO Image Reference')
       return;
@@ -270,99 +265,20 @@ class BoxCanvas extends PureComponent {
     this.image = img;
   }
 
-  // updateCanvas() {
-  //   if (!this.props.canvRef) return;
-  //   const ctx = this.imgRef.current.getContext("2d");
-  //   const canvas = ctx.canvas;
-  //   // set canvas size
-  //   canvas.height = document.documentElement.clientHeight * 0.7;
-  //   canvas.width = document.documentElement.clientWidth * 0.7;
-  //   const ctx2 = this.props.canvRef.current.getContext("2d");
-  //   const canvas2 = ctx2.canvas;
-  //   canvas2.height = canvas.height;
-  //   canvas2.width = canvas.width;
-  //   this.img.onload = function() {
-  //     let final_width, final_height;
-  //     if (canvas.height * (this.img.width / this.img.height) < canvas.width) {
-  //       final_width = canvas.height * (this.img.width / this.img.height);
-  //       final_height = canvas.height;
-  //     } else {
-  //       final_width = canvas.width;
-  //       final_height = canvas.width * (this.img.height / this.img.width);
-  //     }
-  //     ctx.drawImage(
-  //       this.img,
-  //       0,
-  //       0,
-  //       this.img.width,
-  //       this.img.height,
-  //       0,
-  //       0,
-  //       final_width,
-  //       final_height
-  //     );
-  //   };
-  //   this.drawImage();
-  // }
-
   componentWillUnmount() {
   }
 
-  componentDidUpdate(nextProps) {
-    const nextData = nextProps.evData;
-    // this.drawPath(nextData);
 
-    // this.updateCanvas();
-  }
   componentWillReceiveProps(nextProps) {
     const nextData = nextProps.evData;
-    const { evData } = this.props;
-    // console.log(this.props.scale);
-    // this.updateScale();
-    // this.drawImage();
-    this.drawPath(evData);
-    // this.drawPath(nextData);
+    this.draw(nextData);
   }
 
-  onDocMouseTouchMove (e) {
-    // const pos = getClientPos(e);
-    // console.log(pos)
-
-  };
-  // drawImage() {
-  //   const ctx = this.imgRef.current.getContext("2d");
-  //   const canvas = ctx.canvas;
-  //   this.img.onload = function() {
-  //     let final_width, final_height;
-  //     if (canvas.height * (this.img.width / this.img.height) < canvas.width) {
-  //       final_width = canvas.height * (this.img.width / this.img.height);
-  //       final_height = canvas.height;
-  //     } else {
-  //       final_width = canvas.width;
-  //       final_height = canvas.width * (this.img.height / this.img.width);
-  //     }
-  //     ctx.drawImage(
-  //       this.img,
-  //       0,
-  //       0,
-  //       this.img.width,
-  //       this.img.height,
-  //       0,
-  //       0,
-  //       final_width,
-  //       final_height
-  //     );
-  //   };
-  // }
   drawPath(evData) {
     console.log('drawing...');
     const { offset } = evData;
     const ctx = this.props.canvRef.current.getContext("2d");
-    // ctx.globalCompositeOperation = "destination-out";
-    // ctx.globalCompositeOperation = "source-over";
-    let midX, midY;
-    midX = offset.left + evData.startWidth / 2;
-    midY = offset.top + evData.startHeight / 2;
+    const {midX,midY} = evData;
 
     ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
 
@@ -382,17 +298,38 @@ class BoxCanvas extends PureComponent {
 
     ctx.beginPath();
     ctx.setLineDash([]);
-    ctx.moveTo(offset.left,offset.top);
-    ctx.lineTo(offset.left + evData.startWidth, offset.top);
-    ctx.lineTo(offset.left + evData.startWidth, offset.top + evData.startHeight);
-    ctx.lineTo(offset.left, offset.top + evData.startHeight);
-    ctx.lineTo(offset.left,offset.top);
+    ctx.moveTo(offset.x,offset.y);
+    ctx.lineTo(offset.x + evData.startWidth, offset.y);
+    ctx.lineTo(offset.x + evData.startWidth, offset.y + evData.startHeight);
+    ctx.lineTo(offset.x, offset.y + evData.startHeight);
+    ctx.lineTo(offset.x,offset.y);
     ctx.closePath();
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(evData.midX, evData.midY, 5, 0, 2 * Math.PI);
+    ctx.arc(evData.midX, evData.midY, 1, 0, 2 * Math.PI);
     ctx.stroke();
+  }
+
+  draw (evData) {
+    const { offset, curWidth, curHeight } = evData;
+    // console.log("************************")
+    // console.log(offset, curWidth, curHeight)
+    // console.log("************************")
+    const ctx = this.props.canvRef.current.getContext("2d");
+
+    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+
+    ctx.beginPath();
+    ctx.setLineDash([]);
+    ctx.moveTo(offset.x,offset.y);
+    ctx.lineTo(offset.x + curWidth, offset.y);
+    ctx.lineTo(offset.x + curWidth, offset.y + curHeight);
+    ctx.lineTo(offset.x, offset.y + curHeight);
+    ctx.lineTo(offset.x,offset.y);
+    ctx.closePath();
+    ctx.stroke();
+
   }
 
 

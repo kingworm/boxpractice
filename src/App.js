@@ -3,6 +3,7 @@ import ReactDOM from "react-dom";
 import { Router, Link } from "@reach/router";
 import CanvasMain from "./canvas";
 import ThemeContext from "./ThemeContext";
+import BoxView from "./boxview";
 
 const App = () => {
   const theme = useState("darkblue");

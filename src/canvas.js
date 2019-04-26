@@ -94,7 +94,6 @@ class CanvasMain extends React.Component {
     });
   };
   render() {
-    const { scale } = this.state;
     return (
       <>
         <button onClick={this.handleReset}>reset</button>

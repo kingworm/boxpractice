@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom";
-import { Router, Link } from "@reach/router";
-import CanvasMain from "./canvas";
+import { Router } from "@reach/router";
 import BoxView from "./boxview";
 import ThemeContext from "./ThemeContext";
 

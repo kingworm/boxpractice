@@ -7,6 +7,7 @@ import * as React from "react";
 import * as Point from "./Point";
 import * as Size from "./Size";
 import BoxCanvas from "../BoxCanvas";
+import { O_RDONLY } from "constants";
 
 const truncRound = (num: number): number => Math.trunc(num * 10000) / 10000;
 
@@ -25,8 +26,8 @@ type CanvasRect = {
 }
 
 type CropOffset = {
-  y : number,
-  x : number
+  top : number,
+  left : number
 }
 
 type CropRect = {
@@ -43,31 +44,12 @@ type CropRect = {
   xInversed: boolean,
   yInversed: boolean,
   xCrossOver: boolean,
-  yCrossover: boolean,
+  yCrossOver: boolean,
   startXCrossOver: boolean,
   startYCrossOver: boolean,
   ord: string,
   isResize: boolean,
-  offset: Point.Point,
-}
-
-type evData = {
-    startPos: Point.Point,
-    prevPos: Point.Point,
-    curPos: Point.Point,
-    curWidth: number,
-    curHeight: number,
-    ord: string,
-    offset: Point.Point,
-    isResize: boolean,
-    xCrossOver: boolean,
-    yCrossOver: boolean,
-    xInversed: boolean,
-    yInversed: boolean,
-    xDif: number,
-    yDif: number,
-    xMid: number,
-    yMid: number,
+  offset: CropOffset
 }
 
 interface PinchToZoomProps {
@@ -85,8 +67,17 @@ interface PinchToZoomProps {
 
 interface PinchToZoomState {
   lastSingleTouchPoint: Point.Point;
+  startDrawTouchPoint: Point.Point;
+  endDrawTouchPoint: Point.Point;
+  zoomDrawTouchPoint: Point.Point;
+  zoomDrawFactor: number;
+  zoomResizeFactor: number;
+  zoomRect:CanvasRect;
+  prevRect:CanvasRect;
   isRect: boolean;
+  ord: string;
   drawIsActive: boolean;
+
 }
 
 function inverseOrd(ord: string) {
@@ -163,14 +154,12 @@ class CustomPinchToZoom extends React.Component<
   };
 
   public currentGesture: GUESTURE_TYPE;
-  public drawStartZoomFactor: number;
-  public drawStartPoint: Point.Point;
-  public drawStartTranslate: Point.Point;
 
-  public resizeStartZoomFactor: number;
-  public resizeStartPoint: Point.Point;
-  public resizeStartTranslate: Point.Point;
-  public resizeStartArea: string;
+  //pinch & pan
+  public pinchPanStartZoomFactor: number;
+  public pinchPanStartTouchMidpoint: Point.Point;
+  public pinchPanStartTranslate: Point.Point;
+  public pinchPanStartTouchPointDist: number;
 
   public pinchStartZoomFactor: number;
   public pinchStartTouchMidpoint: Point.Point;
@@ -184,13 +173,12 @@ class CustomPinchToZoom extends React.Component<
   public zoomArea?: HTMLDivElement;
   public canv =  React.createRef<HTMLCanvasElement>();
   private lastTime: number;
-//   private evData: CropRect;
+  private evData: CropRect;
   private drawStarted: boolean;
   private mouseDownOnCrop: boolean;
   public drawCanvas: Function;
   private canvWidth: number;
   private canvHeight: number;
-  public evData: evData;
   constructor(props: PinchToZoomProps) {
     super(props);
     // instance variable: transform data
@@ -210,16 +198,11 @@ class CustomPinchToZoom extends React.Component<
     this.pinchStartTranslate = Point.newOriginPoint();
     this.pinchStartTouchPointDist = 0;
 
-    // instance variable: draw
-    this.drawStartZoomFactor = 1.0;
-    this.drawStartPoint = Point.newOriginPoint();
-    this.drawStartTranslate = Point.newOriginPoint();
-
-    // instance variable: draw
-    this.resizeStartZoomFactor = 1.0;
-    this.resizeStartPoint = Point.newOriginPoint();
-    this.resizeStartTranslate = Point.newOriginPoint();
-    this.resizeStartArea = "";
+    // instance variable: pinchpan
+    this.pinchPanStartZoomFactor = 1.0;
+    this.pinchPanStartTouchMidpoint = Point.newOriginPoint();
+    this.pinchPanStartTranslate = Point.newOriginPoint();
+    this.pinchPanStartTouchPointDist = 0;
 
     // instance variable: pan
     this.panStartPoint = Point.newOriginPoint();
@@ -228,30 +211,49 @@ class CustomPinchToZoom extends React.Component<
     this.mouseDownOnCrop = false;
     this.evData = {
       startPos: Point.newOriginPoint(),
-      prevPos: Point.newOriginPoint(),
-      curPos: Point.newOriginPoint(),
-      curHeight: 0,
-      curWidth: 0,
+      startWidth: 0,
+      startHeight: 0,
+      absPos: Point.newOriginPoint(),
+      absWidth: 0,
+      absHeight: 0,
       xDif: 0,
       yDif: 0,
-      xMid: 0,
-      yMid: 0,
+      midX: 0,
+      midY: 0,
       xInversed: false,
       yInversed: false,
       xCrossOver: false,
       yCrossOver: false,
-      ord:"",
+      startXCrossOver: false,
+      startYCrossOver: false,
+      ord:"nw",
       isResize: false,
       offset: {
-        y:0,
-        x:0
+        top:0,
+        left:0
       }
     }
     // record last touch point
     this.state = {
       lastSingleTouchPoint: Point.newOriginPoint(),
       isRect : false,
+      startDrawTouchPoint: Point.newOriginPoint(),
+      endDrawTouchPoint: Point.newOriginPoint(),
+      zoomDrawTouchPoint: Point.newOriginPoint(),
+      zoomDrawFactor: 1,
+      zoomResizeFactor: 1,
       drawIsActive: false,
+      zoomRect: {
+        pos: Point.newOriginPoint(),
+        width: 0,
+        height: 0
+      },
+      prevRect: {
+        pos: Point.newOriginPoint(),
+        width: 0,
+        height: 0
+      },
+      ord: "nw"
     };
 
     // CUSTOM : for doubletap variable
@@ -275,49 +277,6 @@ class CustomPinchToZoom extends React.Component<
   /*
     Pinch event handlers
   */
-  public getData() {
-      const { offset, curWidth, curHeight } = this.evData;
-      return {
-          offset,
-          width: curWidth,
-          height: curHeight,
-          canvasWidth: this.canvWidth,
-          canvasHeight: this.canvHeight
-      }
-  }
-
-  public reset() {
-    this.setTransform({
-        zoomFactor: 1,
-        translate: Point.newOriginPoint()
-    })
-    this.evData = {
-        startPos: Point.newOriginPoint(),
-        prevPos: Point.newOriginPoint(),
-        curPos: Point.newOriginPoint(),
-        curHeight: 0,
-        curWidth: 0,
-        xDif: 0,
-        yDif: 0,
-        xMid: 0,
-        yMid: 0,
-        xInversed: false,
-        yInversed: false,
-        xCrossOver: false,
-        yCrossOver: false,
-        ord:"",
-        isResize: false,
-        offset: {
-          y:0,
-          x:0
-        }
-    }
-    this.setState({
-        lastSingleTouchPoint: Point.newOriginPoint(),
-        isRect: false,
-        drawIsActive: false
-    })
-  }
 
   public onPinchStart(syntheticEvent: React.SyntheticEvent) {
     const [p1, p2] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
@@ -406,6 +365,343 @@ class CustomPinchToZoom extends React.Component<
     this.guardZoomAreaTranslate()
   }
 
+  public onDrawBoxStart(syntheticEvent: React.SyntheticEvent) {
+    const { moveMode } = this.props;
+    const { isRect } = this.state;
+    if (moveMode || isRect) {
+      return;
+    }
+    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
+    const { currentZoomFactor, currentTranslate } = this.getTransform();
+    let absRect : CanvasRect;
+    absRect = this.getAbsoluteTransform(p1, 0, 0);
+    this.evData = {
+      startPos: absRect.pos,
+      absPos: absRect.pos,
+      absWidth: absRect.width,
+      absHeight: absRect.height,
+      offset: {
+        top: 0,
+        left: 0
+      },
+      startWidth: 0,
+      startHeight: 0,
+      xDif: 0,
+      yDif: 0,
+      midX: 0,
+      midY: 0,
+      xInversed: false,
+      yInversed: false,
+      xCrossOver: false,
+      yCrossOver: false,
+      startXCrossOver: false,
+      startYCrossOver: false,
+      isResize: false,
+      ord: "nw"
+    };
+
+    this.mouseDownOnCrop = true;
+    this.setState({
+      drawIsActive: true
+    });
+
+  }
+  // private straightenYPath(clientX: number): number {
+  //   const {evData} = this;
+  //   const { ord, offset } = evData;
+  //   const startWidth = 
+  //     (evData.startWidth / 100) * this.canv.current!.width | evData.startWidth;
+  //   const startHeight = 
+  //     (evData.startHeight / 100) * this.canv.current!.height | evData.startHeight;
+  //   let k;
+  //   let d;
+
+  //   if (ord === "nw" || ord === "se") {
+  //     k = startHeight / startWidth;
+  //     d = offset.top - offset.left * k;
+  //   } else {
+  //     k = -startHeight / startWidth;
+  //     d = offset.top + (startHeight - offset.left * k);
+  //   }
+    
+  //   return k * clientX + d;
+  // }
+  public onDrawBoxMove(syntheticEvent: React.SyntheticEvent) {
+    const { moveMode } = this.props;
+    const { isRect } = this.state;
+    if (moveMode || !this.mouseDownOnCrop || isRect) {
+      return;
+    }
+    const { evData } = this;
+    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
+    let absPos: Point.Point;
+    absPos = this.getAbsolutePos(p1);
+
+    // I don`t know 
+    // if (evData.isResize && evData.offset) {
+    //   p1.y = this.straightenYPath(p1.x);
+    // }
+    new Promise<boolean>((res, rej) => {
+    res(true);
+    }).then(res=>{
+      this.setState({
+        endDrawTouchPoint: p1
+      });
+    }).then(res=>{
+      this.updateZoomRect(absPos);
+    }).then(res=>{
+      // this.drawRect();
+    }).catch(rej=>{
+      console.error('Error on Drawing Rectangle');
+    })
+    
+  }
+
+  private getOffset() {
+    const { evData } = this;
+    // const { ord, startPos } = evData;
+    const { ord, absPos } = evData;
+    let top, left;
+    top = ord.includes("n") ? absPos.y : absPos.y - evData.absHeight;
+    left = ord.includes("w") ? absPos.x : absPos.x - evData.absWidth;
+    
+    this.evData = {
+      ...this.evData,
+      offset : {
+        top : top,
+        left : left
+      }
+    }
+  }
+  private updateZoomRect(pos: Point.Point) {
+    // block CrossOver
+    const { evData } = this;
+    const { startPos, startHeight, startWidth } = evData;
+    const { absPos, absHeight, absWidth, offset } = evData;
+    const { currentZoomFactor, currentTranslate } = this.getTransform();
+
+    let xInversed, yInversed, xDif, yDif;
+    let ord = "";
+    xDif = pos.x - absPos.x;
+    yDif = pos.y - absPos.y;
+    xInversed = xDif > 0 ? false : true;
+    yInversed = yDif > 0 ? false : true;
+
+    if (yInversed) {
+      ord += "s";
+    } else {
+      ord += "n";
+    }
+    if (xInversed) {
+      ord += "e";
+    } else {
+      ord += "w";
+    }
+    this.getOffset()
+    this.evData = {
+      ...this.evData,
+      absHeight : Math.abs(yDif),
+      absWidth : Math.abs(xDif),
+      xDif: Math.abs(xDif) - absWidth,
+      yDif: Math.abs(xDif) - absHeight,
+      ord,
+      xInversed,
+      yInversed,
+    }
+  }
+
+  public onDrawBoxEnd() {
+    const { evData } = this;
+    const { offset } = evData;
+    const { isRect } = this.state;
+    if ( isRect ) {
+      return;
+    }
+    this.setState({
+      drawIsActive : false,
+      isRect: true,
+    })
+    this.drawStarted = false;
+    this.mouseDownOnCrop = false;
+    let midX, midY, relMid: Point.Point, absRect:CanvasRect;
+    midX = offset.left + evData.absWidth / 2;
+    midY = offset.top + evData.absHeight / 2;
+    // absRect = this.getAbsoluteTransform(evData.startPos,evData.startWidth,evData.startHeight);
+    this.evData = {
+      ...this.evData,
+      // absPos: evData.startPos,
+      // absHeight: absRect.height,
+      // absWidth: absRect.width,
+      midX,
+      midY
+    }
+    // relMid = this.getRelativePos({ x: midX, y: midY })
+    // console.log("mid",midX,midY, relMid);
+    this.autoZoomToPosition({ x: midX, y: midY })
+  }
+  
+  public onResizeBoxStart(syntheticEvent: React.SyntheticEvent) {
+    //block
+    if (!this.state.isRect || this.props.moveMode) {
+      console.log('Resize Not starting...')
+      return;
+    }
+    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
+    const { evData } = this;
+    const { offset, midX, midY } = evData;
+    let absPos:Point.Point, ord="";
+    absPos = this.getAbsolutePos(p1);
+    if (midY >= absPos.y) ord += "n"; else ord += "s";
+    if (midX >= absPos.x) ord += "w"; else ord += "e";
+    this.evData = {
+      ...this.evData,
+      startPos : absPos,
+      isResize : true,
+      ord,
+      xDif : 0,
+      yDif : 0,
+      xInversed: false,
+      yInversed: false,
+      xCrossOver: false,
+      yCrossOver: false,
+      startXCrossOver: false,
+      startYCrossOver: false,
+      offset
+    }
+
+    this.mouseDownOnCrop = true;
+  }
+
+  public crossOverCheck(pos: Point.Point) {
+    const { evData } = this;
+    const { ord, offset } = evData;
+    let newPos: Point.Point = {x:0,y:0};
+    let xCrossOver = false, yCrossOver = false;
+    if (ord.includes("n") && pos.y >= offset.top + evData.absHeight) {
+      newPos.y = offset.top + evData.absHeight;
+      yCrossOver = true;
+    }
+    else if (ord.includes("s") && pos.y <= offset.top) {
+      newPos.y = offset.top;
+      yCrossOver = true;
+      console.log('yCross')
+    } else {
+      newPos.y = pos.y;
+    }
+
+    if (ord.includes("e") && pos.x <= offset.left) {
+      newPos.x = offset.left;
+      xCrossOver = true;
+      console.log('xCross')
+    }
+    else if (ord.includes("w") && pos.x >= offset.left + evData.absWidth) {
+      newPos.x = offset.left + evData.absWidth;
+      xCrossOver = true;
+    } else {
+      newPos.x = pos.x;
+    }
+
+    this.evData = {
+      ...this.evData,
+      xCrossOver,
+      yCrossOver
+    }
+
+    return newPos;
+  }
+
+  public onResizeBoxMove(syntheticEvent: React.SyntheticEvent) {
+    if (!this.state.isRect || !this.mouseDownOnCrop || this.props.moveMode ) {
+      return;
+    }
+    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
+    const { evData } = this;
+    const { startPos, ord } = evData;
+    let pos: Point.Point;
+    // pos = this.getAbsolutePos(p1);
+    pos = this.crossOverCheck(p1);
+    let xDif, yDif;
+    xDif = (pos.x - startPos.x) * 1; 
+    yDif = (pos.y - startPos.y) * 1;
+    let newOffset = evData.offset;
+    let newWidth = evData.absWidth, newHeight = evData.absHeight;
+    // left, top을 변경시킬 때, 박스가 흔들리는 부분 수정해주어야 함.
+    if (ord.includes("w")) {
+      let right = evData.offset.left + evData.absWidth
+      right -= xDif;
+      newWidth = right - evData.offset.left;
+      newWidth = newWidth > 0 ? newWidth : 0;
+      newOffset.left += newWidth > 0 ? xDif : 0;
+      // newWidth -= xDif;
+    } else {
+      newWidth += xDif;
+    }
+    if (ord.includes("n")) {
+      newHeight -= yDif;
+      newHeight = newHeight > 0 ? newHeight : 0;
+      newOffset.top += newHeight > 0 ? yDif : 0;
+    } else {
+      newHeight += yDif;
+    }
+    newWidth = clamp(0,newWidth,this.canvWidth);
+    newHeight = clamp(0,newHeight,this.canvHeight);
+    // add update ord.
+    let midX, midY, absRect:CanvasRect;
+    midX = newOffset.left + newWidth / 2;
+    midY = newOffset.top + newHeight / 2;
+    console.log(midX,midY,pos,newOffset,ord)
+    absRect = this.getAbsoluteTransform(
+      {
+        x: newOffset.left,
+        y: newOffset.top,
+      } ,newWidth,newHeight
+      );
+
+    this.evData = {
+      ...this.evData,
+      startPos: pos,
+      midX,
+      midY,
+      xDif,
+      yDif,
+      absPos: pos,
+      absWidth: newWidth,
+      absHeight: newHeight,
+      offset: newOffset,
+      startHeight: newHeight,
+      startWidth: newWidth
+    };
+    this.setState({
+      lastSingleTouchPoint: pos
+    });
+  }
+
+
+  public onResizeBoxEnd() {
+    const { evData } = this;
+    const { offset } = evData;
+    const { currentZoomFactor, currentTranslate } = this.getTransform();
+    this.mouseDownOnCrop = false;
+    //set default with (isResize), drawStarted?
+    //zoom
+    let midX, midY;
+    midX = offset.left + evData.startWidth / 2;
+    midY = offset.top + evData.startHeight / 2;
+    this.evData = {
+      ...this.evData,
+      midX,
+      midY,
+    }
+    this.setState({
+      drawIsActive: false
+    })
+
+    console.log("Transform: ",currentZoomFactor, currentTranslate);
+    // this.autoZoomToPosition({ x: midX, y: midY })
+    // console.log(offset)
+
+  }
+
   public getAbsoluteTransform(pos: Point.Point, width:number, height:number) : CanvasRect {
     const { currentZoomFactor, currentTranslate } = this.getTransform();
 
@@ -473,373 +769,6 @@ class CustomPinchToZoom extends React.Component<
       y: relY
     }
   }
-
-  public isPanAvailable() {
-    const { evData } = this;
-    const { offset, curWidth, curHeight } = evData;
-    const { currentZoomFactor, currentTranslate } = this.getTransform();
-    let dir: string="";
-    let relOffset: Point.Point = this.getRelativePos(offset),
-        relEdge: Point.Point = this.getRelativePos(
-            Point.sum(offset, {
-                x: curWidth,
-                y: curHeight
-            }));
-    if (relOffset.x < 3) {
-        dir += "l";
-        this.setTransform({
-            zoomFactor: currentZoomFactor - 0.1,
-            translate: {
-                x: currentTranslate.x + 5,
-                y: currentTranslate.y
-            }
-        });
-    }
-    if (relEdge.x > this.canvWidth - 3) {
-        dir += "r";
-        this.setTransform({
-            zoomFactor: currentZoomFactor - 0.1,
-            translate: {
-                x: currentTranslate.x - 5,
-                y: currentTranslate.y
-            }
-        });
-    }
-    if (relOffset.y < 3) {
-        dir += "u";
-        this.setTransform({
-            zoomFactor: currentZoomFactor - 0.1,
-            translate: {
-                x: currentTranslate.x,
-                y: currentTranslate.y + 5
-            }
-        });
-    }
-    if (relEdge.y > this.canvHeight - 3) {
-        dir += "d";
-        this.setTransform({
-            zoomFactor: currentZoomFactor - 0.1,
-            translate: {
-                x: currentTranslate.x,
-                y: currentTranslate.y - 5
-            }
-        });
-    }
-    // this.panContentArea()
-    return dir;
-  }
-
-  public onDrawBoxStart(syntheticEvent: React.SyntheticEvent) {
-    const { moveMode } = this.props;
-    const { isRect } = this.state;
-    if (moveMode || isRect) {
-      return;
-    }
-    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
-    const { currentTranslate, currentZoomFactor } = this.getTransform();
-
-    this.drawStartPoint = p1;
-    this.drawStartTranslate = currentTranslate;
-    this.drawStartZoomFactor = currentZoomFactor;
-    this.mouseDownOnCrop = true;
-    this.setState({
-        drawIsActive: true
-      });
-    let startPos: Point.Point;
-    startPos = this.getAbsolutePos(p1);
-    this.evData = {
-        ...this.evData,
-        startPos,
-        curPos: startPos,
-        offset: {
-            x: startPos.x,
-            y: startPos.y
-        }
-    }
-  }
-
-  public onDrawBoxMove(syntheticEvent: React.SyntheticEvent) {
-    const { moveMode } = this.props;
-    const { isRect } = this.state;
-    if (moveMode || !this.mouseDownOnCrop || isRect) {
-      return;
-    }
-    const [dragPoint] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
-    const absDragPoint = this.getAbsolutePos(dragPoint);
-    let dir: string;
-    dir = this.isPanAvailable();
-    console.log("draw Pan direction", dir);
-    this.updateEvData(absDragPoint);
-    this.setState({
-        lastSingleTouchPoint: dragPoint
-    })
-    // panContentArea(nextTranslate)
-  }
-
-//   private boundWithinCanvas(p: Point.Point) : boolean {
-//       let origin: Point.Point = {
-//           x: 0,
-//           y: 0
-//       }, endPoint: Point.Point = {
-//           x: this.canvWidth,
-//           y: this.canvHeight
-//       }
-//       console.log("canvSize: ", endPoint);
-//     //   return (Point.boundWithin(origin, p, endPoint));
-//   }
-
-  private updateEvData(absDragPoint: Point.Point) {
-      const { evData } = this;
-      const { startPos } = evData;
-      
-      let xInversed, yInversed, width, height,
-        midPoint:Point.Point, ord: string = "", diff: Point.Point;
-      diff = Point.offset(absDragPoint, startPos);
-      xInversed = (diff.x < 0);
-      yInversed = (diff.y < 0);
-      ord += (yInversed) ? "u" : "d";
-      ord += (xInversed) ? "l" : "r";
-      height = Math.abs(diff.y);
-      width = Math.abs(diff.x);
-      let offset: Point.Point = this.evData.offset;
-      offset.y = ord.includes("d") ? startPos.y : absDragPoint.y;
-      offset.x = ord.includes("r") ? startPos.x : absDragPoint.x;
-      midPoint = Point.sum(startPos, absDragPoint);
-      midPoint = Point.scale(midPoint, 0.5);
-
-      this.evData = {
-          ...this.evData,
-          curPos: absDragPoint,
-          xInversed,
-          yInversed,
-          ord,
-          offset,
-          xMid: midPoint.x,
-          yMid: midPoint.y,
-          xDif: diff.x,
-          yDif: diff.y,
-          curWidth: width,
-          curHeight: height
-      }
-  }
-
-  public onDrawBoxEnd() {
-    const { isRect } = this.state;
-    const { curWidth, curHeight } = this.evData;
-    if ( isRect ) {
-      return;
-    }
-    this.drawStarted = false;
-    this.mouseDownOnCrop = false;
-    this.evData = {
-        ...this.evData,
-        isResize: true,
-        startPos : Point.newOriginPoint(),
-        prevPos : Point.newOriginPoint(),
-        curPos : Point.newOriginPoint(),
-        ord : "",
-        xCrossOver : false,
-        yCrossOver : false,
-        xInversed : false,
-        yInversed : false,
-        xDif : 0,
-        yDif : 0
-    };
-    let midPoint: Point.Point = {
-        x: this.evData.xMid,
-        y: this.evData.yMid
-    }
-    let scale: number = Math.max( this.canvWidth, this.canvHeight) /
-                (Math.max( curWidth, curHeight ) * 3);
-    scale = (scale < 1) ? 1 : scale;
-    this.customZoomToPosition(
-        this.getRelativePos(midPoint), scale);
-    this.setState({
-        drawIsActive : false,
-        isRect: true,
-      });
-  }
-  
-  public onResizeBoxStart(syntheticEvent: React.SyntheticEvent) {
-    const { moveMode } = this.props;
-    const { isRect } = this.state;
-    if (moveMode || !isRect) {
-      return;
-    }
-    const [p1] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
-    console.log("rellllllllll",p1);
-
-    const { currentTranslate, currentZoomFactor } = this.getTransform();
-    console.log("transform: ",currentTranslate, currentZoomFactor)
-    const { evData } = this;
-    const { xMid, yMid } = evData;    this.resizeStartPoint = p1;
-    this.resizeStartTranslate = currentTranslate;
-    this.resizeStartZoomFactor = currentZoomFactor;
-    this.mouseDownOnCrop = true;
-    let startPos: Point.Point, area: string = "", endPos: Point.Point;
-    startPos = this.getAbsolutePos(p1);
-    endPos = Point.sum(this.evData.offset, {
-        x: this.evData.curWidth,
-        y: this.evData.curHeight
-    });
-    console.log('beforeeeeeee', endPos);
-    endPos = this.getRelativePos(endPos);
-    console.log('afterrrrrrrr',endPos)
-    area += (yMid > startPos.y) ? "u" : "d";
-    area += (xMid > startPos.x) ? "l" : "r";
-    this.resizeStartArea = area;
-    console.log("ord: ",area, "mid: ", xMid, yMid, "touch: ", startPos)
-    this.evData = {
-        ...this.evData,
-        startPos,
-        ord : area
-    };
-    this.setState({
-        drawIsActive: true
-      });
-  }
-
-  private crossOverCheck(pos: Point.Point) {
-    const { evData } = this;
-    const { ord, offset } = evData;
-    let newPos: Point.Point = pos;
-    let xCrossOver = false, yCrossOver = false;
-    if (ord.includes("u") && pos.y >= offset.y + evData.curHeight) {
-      newPos.y = offset.y + evData.curHeight;
-      yCrossOver = true;
-    }
-    else if (ord.includes("d") && pos.y <= offset.y) {
-      newPos.y = offset.y;
-      yCrossOver = true;
-    } else {
-      newPos.y = pos.y;
-    }
-
-    if (ord.includes("r") && pos.x <= offset.x) {
-      newPos.x = offset.x;
-      xCrossOver = true;
-    }
-    else if (ord.includes("l") && pos.x >= offset.x + evData.curWidth) {
-      newPos.x = offset.x + evData.curWidth;
-      xCrossOver = true;
-    } else {
-      newPos.x = pos.x;
-    }
-
-    this.evData = {
-      ...this.evData,
-      xCrossOver,
-      yCrossOver,
-      curPos : newPos
-    };
-    this.resizeEvData();
-  }
-
-  private resizeEvData() {
-      const { curPos, startPos, curWidth, curHeight, ord, offset } = this.evData;
-      let newOffset: Point.Point = offset, newHeight: number = curHeight, newWidth: number = curWidth, 
-            diff: Point.Point, midPoint: Point.Point;
-      diff = Point.offset(curPos, startPos);
-    //   console.log("difffffff", diff);
-      
-      if (ord.includes("l")) {
-          newOffset.x = offset.x + diff.x;
-          newOffset.x = clamp(0,newOffset.x,this.canvWidth);
-          if (newOffset.x != 0 || newOffset.x != this.canvWidth) {
-            newWidth = curWidth - diff.x;
-          }
-      } else if (ord.includes("r")) {
-          if (offset.x + curWidth + diff.x < this.canvWidth)
-            newWidth = curWidth + diff.x;
-      }
-      if (ord.includes("u")) {
-          newOffset.y = offset.y + diff.y;
-          newOffset.y = clamp(0,newOffset.y,this.canvHeight);
-          if (newOffset.y != 0 || newOffset.y != this.canvHeight) {
-            newHeight = curHeight - diff.y;
-          }
-      } else if (ord.includes("d")) {
-          if (newOffset.y + newHeight + diff.y < this.canvHeight)
-          newHeight = curHeight + diff.y;
-      }
-      newWidth = clamp(0,newWidth,this.canvWidth);
-      newHeight = clamp(0,newHeight,this.canvHeight);
-      midPoint = {
-          x: newOffset.x + newWidth / 2,
-          y: newOffset.y + newHeight / 2
-      };
-      this.evData = {
-          ...this.evData,
-          startPos: curPos,
-          offset: newOffset,
-          curWidth: newWidth,
-          curHeight: newHeight,
-          xDif: diff.x,
-          yDif: diff.y,
-          xMid: midPoint.x,
-          yMid: midPoint.y
-      }
-      this.setState({
-          lastSingleTouchPoint: curPos
-      })
-  } 
-
-  public onResizeBoxMove(syntheticEvent: React.SyntheticEvent) {
-    const { moveMode } = this.props;
-    const { isRect } = this.state;
-    if (moveMode || !this.mouseDownOnCrop || !isRect) {
-      return;
-    }
-    const [dragPoint] = CustomPinchToZoom.getTouchesCoordinate(syntheticEvent);
-    const { currentTranslate } = this.getTransform();
-    let absDragPoint = this.getAbsolutePos(dragPoint);
-    let dir:string = this.isPanAvailable();
-    console.log("Pan direction", dir )
-
-    this.crossOverCheck(absDragPoint);
-    this.setState({
-        lastSingleTouchPoint: dragPoint
-    })
-    // panContentArea(nextTranslate)
-  }
-
-
-  public onResizeBoxEnd() {
-    const { isRect } = this.state;
-    if ( !isRect ) {
-      console.log('resize end error');
-      return;
-    }
-    this.drawStarted = false;
-    this.mouseDownOnCrop = false;
-    this.evData = {
-        ...this.evData,
-        isResize: true,
-        startPos : Point.newOriginPoint(),
-        prevPos : Point.newOriginPoint(),
-        curPos : Point.newOriginPoint(),
-        ord : "",
-        xCrossOver : false,
-        yCrossOver : false,
-        xInversed : false,
-        yInversed : false,
-        xDif : 0,
-        yDif : 0
-    };
-    let midPoint: Point.Point = {
-        x: this.evData.xMid,
-        y: this.evData.yMid
-    }
-    let scale: number = Math.max( this.canvWidth, this.canvHeight) /
-    (Math.max( this.evData.curWidth, this.evData.curHeight ) * 3);
-    scale = (scale < 1) ? 1 : scale;
-    this.customZoomToPosition(
-        this.getRelativePos(midPoint), scale);
-    this.setState({
-        drawIsActive : false,
-      })
-  }
-
 
 
   public onPinchPanStart(syntheticEvent: React.SyntheticEvent) {
@@ -1159,43 +1088,6 @@ class CustomPinchToZoom extends React.Component<
     this.guardZoomAreaTranslate();
   }
 
-  public customZoomToPosition(pos: Point.Point, zFactor: number) {
-    if (!this.zoomAreaContainer || !this.zoomArea) {
-      return;
-    }
-    const { currentZoomFactor, currentTranslate } = this.getTransform();
-    const zoomAreaContainerW = this.zoomAreaContainer.clientWidth;
-    const zoomAreaContainerH = this.zoomAreaContainer.clientHeight;
-
-    // calculate target points with respect to the zoomArea coordinate
-    // & adjust to current zoomFactor + existing translate
-    const zoomAreaX =
-      (pos.x / currentZoomFactor - currentTranslate.x) * zFactor;
-    const zoomAreaY =
-      (pos.y / currentZoomFactor - currentTranslate.y) * zFactor;
-
-    // calculate distance to translate the target points to zoomAreaContainer's center
-    const deltaX = zoomAreaContainerW / 2 - zoomAreaX;
-    const deltaY = zoomAreaContainerH / 2 - zoomAreaY;
-
-    // adjust to the new zoomFactor
-    const inScaleTranslate = {
-      x: deltaX / zFactor,
-      y: deltaY / zFactor
-    };
-
-    // update zoom scale and corresponding translate
-    this.zoomArea.style.transitionDuration = "0.3s";
-    this.setTransform({
-      zoomFactor: zFactor,
-      translate: {
-        x: inScaleTranslate.x,
-        y: inScaleTranslate.y
-      }
-    });
-    this.guardZoomAreaTranslate();
-  }
-
   /*
     update zoom area transform
   */
@@ -1272,11 +1164,16 @@ class CustomPinchToZoom extends React.Component<
       width: "100%" // match `pinch-to-zoom-container` width
     };
     const { canvRef } = this.props;
+    // console.log(this.evData);
     if (debug) {
       classNameList.push("debug");
       containerInlineStyle.backgroundColor = "red";
     }
 
+    // if (!children || typeof children !== "function") {
+    //   throw new Error(`ProgressiveImage requires a function as its only child`);
+    // }
+    // console.log(children);
     return (
       <div
         className={className.concat(classNameList.join(" "))}
@@ -1295,15 +1192,18 @@ class CustomPinchToZoom extends React.Component<
             this.zoomArea = c || undefined;
           }}
         >
+          {/* {canvRef} */}
           <BoxCanvas
             style={{ position: "relative" }}
             url={this.props.src}
             canvRef = {this.canv}
             isRect = {this.state.isRect}
+            // getAbsoluteTransform = {this.getAbsoluteTransform}
             zFactor = {currentZoomFactor}
             translate = {currentTranslate}
             evData = {this.evData}
           />
+          {/* {children(this.transform.zoomFactor)} */}
         </div>
       </div>
     );
